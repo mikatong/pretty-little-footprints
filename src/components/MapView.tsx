@@ -10,6 +10,19 @@ type MapViewProps = {
 };
 
 const mapStyle = "https://tiles.openfreemap.org/styles/positron";
+const worldCenter: [number, number] = [8, 12];
+const worldBounds: [[number, number], [number, number]] = [
+  [-179.5, -72],
+  [179.5, 82],
+];
+
+const getWorldZoom = () => {
+  if (typeof window === "undefined") return 1.2;
+  if (window.innerWidth < 560) return 0.62;
+  if (window.innerWidth < 900) return 0.88;
+  if (window.innerWidth < 1300) return 1.02;
+  return 1.18;
+};
 
 export function MapView({ places, selectedPlace, onSelect }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -23,11 +36,16 @@ export function MapView({ places, selectedPlace, onSelect }: MapViewProps) {
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: mapStyle,
-      center: [15, 20],
-      zoom: 1.35,
-      attributionControl: true,
+      center: worldCenter,
+      zoom: getWorldZoom(),
+      minZoom: 0.55,
+      maxZoom: 5,
+      maxBounds: worldBounds,
+      renderWorldCopies: false,
+      attributionControl: false,
     });
 
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     map.on("load", () => setMapReady(true));
     mapRef.current = map;
@@ -52,6 +70,9 @@ export function MapView({ places, selectedPlace, onSelect }: MapViewProps) {
       markerElement.type = "button";
       markerElement.className = `map-marker ${place.category}`;
       markerElement.setAttribute("aria-label", `Select ${place.name}`);
+      markerElement.dataset.labelPosition = place.labelPosition ?? "right";
+      markerElement.style.setProperty("--label-x", `${place.labelOffset?.[0] ?? 0}px`);
+      markerElement.style.setProperty("--label-y", `${place.labelOffset?.[1] ?? 0}px`);
       markerElement.title = place.name;
 
       const markerLabel = document.createElement("span");
@@ -66,16 +87,6 @@ export function MapView({ places, selectedPlace, onSelect }: MapViewProps) {
 
       markersRef.current.push({ id: place.id, marker, element: markerElement });
     });
-
-    if (places.length > 0) {
-      const bounds = new maplibregl.LngLatBounds();
-      places.forEach((place) => bounds.extend([place.lng, place.lat]));
-      map.fitBounds(bounds, {
-        padding: { top: 80, right: 80, bottom: 80, left: 80 },
-        maxZoom: 3.2,
-        duration: 700,
-      });
-    }
   }, [places, mapReady, onSelect]);
 
   useEffect(() => {
@@ -83,18 +94,6 @@ export function MapView({ places, selectedPlace, onSelect }: MapViewProps) {
       element.classList.toggle("selected", id === selectedPlace.id);
     });
   }, [selectedPlace.id, places]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !mapReady || !selectedPlace) return;
-
-    map.flyTo({
-      center: [selectedPlace.lng, selectedPlace.lat],
-      zoom: Math.max(map.getZoom(), 2.4),
-      duration: 700,
-      essential: true,
-    });
-  }, [selectedPlace, mapReady]);
 
   return <div ref={containerRef} className="map-view" aria-label="Interactive travel footprint map" />;
 }
