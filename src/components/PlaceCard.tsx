@@ -25,12 +25,17 @@ export function PlaceCard({ place }: PlaceCardProps) {
       </div>
 
       <div className="place-card-body">
-        <p className={`category-pill ${place.category}`}>{categoryLabels[place.category]}</p>
         <h2>{place.name}</h2>
-        <p className="place-meta">
-          {place.country} · {place.year}
-        </p>
+        <p className="place-country">{place.country}</p>
+        <div className="place-meta">
+          <span>
+            <i className={`legend-dot ${place.category}`} />
+            {categoryLabels[place.category]}
+          </span>
+          <span>{place.year}</span>
+        </div>
         <p className="place-note">{place.note}</p>
+        <p className="closing-line">softened here</p>
 
         {place.links && place.links.length > 0 ? (
           <div className="place-links">

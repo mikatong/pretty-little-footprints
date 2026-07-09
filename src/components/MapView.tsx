@@ -14,7 +14,7 @@ const mapStyle = "https://tiles.openfreemap.org/styles/positron";
 export function MapView({ places, selectedPlace, onSelect }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
-  const markersRef = useRef<maplibregl.Marker[]>([]);
+  const markersRef = useRef<{ id: string; marker: maplibregl.Marker; element: HTMLButtonElement }[]>([]);
   const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
@@ -33,7 +33,7 @@ export function MapView({ places, selectedPlace, onSelect }: MapViewProps) {
     mapRef.current = map;
 
     return () => {
-      markersRef.current.forEach((marker) => marker.remove());
+      markersRef.current.forEach(({ marker }) => marker.remove());
       markersRef.current = [];
       map.remove();
       mapRef.current = null;
@@ -44,7 +44,7 @@ export function MapView({ places, selectedPlace, onSelect }: MapViewProps) {
     const map = mapRef.current;
     if (!map || !mapReady) return;
 
-    markersRef.current.forEach((marker) => marker.remove());
+    markersRef.current.forEach(({ marker }) => marker.remove());
     markersRef.current = [];
 
     places.forEach((place) => {
@@ -64,7 +64,7 @@ export function MapView({ places, selectedPlace, onSelect }: MapViewProps) {
         .setLngLat([place.lng, place.lat])
         .addTo(map);
 
-      markersRef.current.push(marker);
+      markersRef.current.push({ id: place.id, marker, element: markerElement });
     });
 
     if (places.length > 0) {
@@ -77,6 +77,12 @@ export function MapView({ places, selectedPlace, onSelect }: MapViewProps) {
       });
     }
   }, [places, mapReady, onSelect]);
+
+  useEffect(() => {
+    markersRef.current.forEach(({ id, element }) => {
+      element.classList.toggle("selected", id === selectedPlace.id);
+    });
+  }, [selectedPlace.id, places]);
 
   useEffect(() => {
     const map = mapRef.current;

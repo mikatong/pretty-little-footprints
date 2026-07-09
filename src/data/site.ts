@@ -1,8 +1,8 @@
 export const siteConfig = {
-  title: "Pretty Little Footprints",
+  title: "My Footprint Map",
   eyebrow: "Pretty Little Maps",
   description:
-    "A soft open-source travel footprint map for people who live, work, wander, and start over in different places.",
+    "A soft visual archive of places I have lived, worked, wandered through, and kept with me.",
   footer:
-    "Made for people who live in places, not just visit them. Open-source on GitHub.",
+    "Made for people who live in places, not just visit them.",
 };
