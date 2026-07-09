@@ -10,6 +10,8 @@ export type Place = {
   year: string;
   note: string;
   photo?: string;
+  labelPosition?: "top" | "right" | "bottom" | "left";
+  labelOffset?: [number, number];
   links?: {
     label: string;
     url: string;

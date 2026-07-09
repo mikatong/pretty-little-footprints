@@ -61,7 +61,6 @@ export default function App() {
               </span>
             ))}
           </div>
-          <p className="map-prompt">Click on a place to see the story</p>
         </div>
 
         <aside className="side-panel">

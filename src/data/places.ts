@@ -11,6 +11,8 @@ export const places: Place[] = [
     year: "1997-2014",
     note: "Where I was born. Tea houses, slow mornings, and the first map I ever knew.",
     photo: "/places/chengdu.svg",
+    labelPosition: "left",
+    labelOffset: [-6, -2],
   },
   {
     id: "waterloo",
@@ -22,6 +24,8 @@ export const places: Place[] = [
     year: "2017-2021",
     note: "Math years, long winters, and the first version of an independent life.",
     photo: "/places/waterloo.svg",
+    labelPosition: "top",
+    labelOffset: [-10, -6],
   },
   {
     id: "ann-arbor",
@@ -33,6 +37,8 @@ export const places: Place[] = [
     year: "2021-2023",
     note: "A college town chapter with libraries, statistics, and small rituals.",
     photo: "/places/ann-arbor.svg",
+    labelPosition: "right",
+    labelOffset: [10, 8],
   },
   {
     id: "palo-alto",
@@ -44,6 +50,8 @@ export const places: Place[] = [
     year: "2023-2026",
     note: "Three years at Stanford Medicine. A chapter of ambition, structure, and quiet burnout.",
     photo: "/places/palo-alto.svg",
+    labelPosition: "bottom",
+    labelOffset: [0, 8],
   },
   {
     id: "canggu",
@@ -55,6 +63,8 @@ export const places: Place[] = [
     year: "2026",
     note: "Where I learned that a day can be built around coffee, movement, ocean, and doing less.",
     photo: "/places/canggu.svg",
+    labelPosition: "right",
+    labelOffset: [12, -8],
   },
   {
     id: "ubud",
@@ -66,6 +76,8 @@ export const places: Place[] = [
     year: "2026",
     note: "Forest mornings, slow meals, and the kind of quiet that changes your pace.",
     photo: "/places/ubud.svg",
+    labelPosition: "bottom",
+    labelOffset: [-8, 12],
   },
   {
     id: "lima",
@@ -77,6 +89,8 @@ export const places: Place[] = [
     year: "2025",
     note: "Coastal fog, ceviche, and a city that felt less obvious than expected.",
     photo: "/places/lima.svg",
+    labelPosition: "right",
+    labelOffset: [8, -2],
   },
   {
     id: "machu-picchu",
@@ -88,6 +102,8 @@ export const places: Place[] = [
     year: "2025",
     note: "A place that made history feel physical.",
     photo: "/places/machu-picchu.svg",
+    labelPosition: "left",
+    labelOffset: [-8, 8],
   },
   {
     id: "patagonia",
@@ -99,6 +115,8 @@ export const places: Place[] = [
     year: "2025",
     note: "Wind, mountains, and the strange calm of feeling very small.",
     photo: "/places/patagonia.svg",
+    labelPosition: "right",
+    labelOffset: [8, 8],
   },
   {
     id: "antarctica",
@@ -110,6 +128,8 @@ export const places: Place[] = [
     year: "2025",
     note: "A white silence that made every other place feel louder.",
     photo: "/places/antarctica.svg",
+    labelPosition: "right",
+    labelOffset: [8, 8],
   },
   {
     id: "tokyo",
@@ -121,6 +141,8 @@ export const places: Place[] = [
     year: "2024",
     note: "Tiny details, soft mornings, and the discipline of beautiful daily life.",
     photo: "/places/tokyo.svg",
+    labelPosition: "right",
+    labelOffset: [8, 0],
   },
   {
     id: "europe",
@@ -132,5 +154,7 @@ export const places: Place[] = [
     year: "Soon",
     note: "A placeholder for the next chapter.",
     photo: "/places/europe.svg",
+    labelPosition: "top",
+    labelOffset: [0, -8],
   },
 ];
