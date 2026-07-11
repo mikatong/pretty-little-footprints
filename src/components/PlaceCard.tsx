@@ -1,53 +1,46 @@
-import { ExternalLink } from "lucide-react";
 import type { Place } from "../types";
-
-const categoryLabels: Record<Place["category"], string> = {
-  lived: "Lived",
-  worked: "Worked",
-  stayed: "Stayed",
-  visited: "Visited",
-  "still-mapping": "Still Mapping",
-};
 
 type PlaceCardProps = {
   place: Place;
+  month: string;
+  selected: boolean;
+  onSelect: (place: Place) => void;
 };
 
-export function PlaceCard({ place }: PlaceCardProps) {
+export function PlaceCard({ place, month, selected, onSelect }: PlaceCardProps) {
+  const storyUrl = place.story ? `/stories/${place.story.slug}` : undefined;
+
+  function handleKeyDown(event: { key: string; preventDefault: () => void }) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onSelect(place);
+    }
+  }
+
   return (
-    <article className="place-card">
+    <article
+      className={`place-card ${selected ? "selected" : ""}`}
+      onClick={() => onSelect(place)}
+      onKeyDown={handleKeyDown}
+      role="button"
+      tabIndex={0}
+      aria-current={selected ? "true" : undefined}
+    >
       <div className="photo-wrap">
-        {place.photo ? (
-          <img src={place.photo} alt={`${place.name} travel memory`} />
-        ) : (
-          <div className="photo-fallback">{place.name}</div>
-        )}
+        {place.photo ? <img src={place.photo} alt={`${place.name} travel memory`} /> : null}
       </div>
-
-      <div className="place-card-body">
-        <h2>{place.name}</h2>
-        <p className="place-country">{place.country}</p>
-        <div className="place-meta">
-          <span>
-            <i className={`legend-dot ${place.category}`} />
-            {categoryLabels[place.category]}
-          </span>
-          <span>{place.year}</span>
-        </div>
-        <p className="place-note">{place.note}</p>
-        <p className="closing-line">softened here</p>
-
-        {place.links && place.links.length > 0 ? (
-          <div className="place-links">
-            {place.links.map((link) => (
-              <a key={link.url} href={link.url} target="_blank" rel="noreferrer">
-                {link.label}
-                <ExternalLink size={14} aria-hidden="true" />
-              </a>
-            ))}
-          </div>
+      <span className="place-card-body">
+        <small>
+          {month} · {place.country}
+        </small>
+        <strong>{place.name}</strong>
+        {place.note ? <em>{place.note}</em> : null}
+        {place.hasStory && storyUrl ? (
+          <a href={storyUrl} onClick={(event: { stopPropagation: () => void }) => event.stopPropagation()}>
+            Read →
+          </a>
         ) : null}
-      </div>
+      </span>
     </article>
   );
 }

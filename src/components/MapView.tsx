@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { Place } from "../types";
+import type { MapPoint, Place } from "../types";
 
 type MapViewProps = {
   places: Place[];
@@ -22,6 +22,23 @@ const getWorldZoom = () => {
   if (window.innerWidth < 900) return 0.88;
   if (window.innerWidth < 1300) return 1.02;
   return 1.18;
+};
+
+const getContinentClass = (place: Place | MapPoint) => {
+  if (place.country.includes("United States") || place.country.includes("Canada")) return "north-america";
+  if (place.country.includes("Peru") || place.country.includes("Chile") || place.country.includes("Argentina")) {
+    return "south-america";
+  }
+  if (place.country.includes("Japan") || place.country.includes("China") || place.country.includes("Indonesia")) {
+    return "asia";
+  }
+  if (place.country.includes("Antarctica")) return "antarctica";
+  return "europe";
+};
+
+const getPrimaryPoint = (place: Place): MapPoint | Place | undefined => {
+  if (place.lat !== undefined && place.lng !== undefined) return place;
+  return place.mapPoints?.find((point) => point.lat !== undefined && point.lng !== undefined);
 };
 
 export function MapView({ places, selectedPlace, onSelect }: MapViewProps) {
@@ -47,7 +64,33 @@ export function MapView({ places, selectedPlace, onSelect }: MapViewProps) {
 
     map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-    map.on("load", () => setMapReady(true));
+    map.on("load", () => {
+      map.addSource("journey-route", {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "LineString",
+            coordinates: [],
+          },
+        },
+      });
+
+      map.addLayer({
+        id: "journey-route-line",
+        type: "line",
+        source: "journey-route",
+        paint: {
+          "line-color": "#8d624c",
+          "line-width": 1,
+          "line-opacity": 0.32,
+          "line-dasharray": [2, 3],
+        },
+      });
+
+      setMapReady(true);
+    });
     mapRef.current = map;
 
     return () => {
@@ -66,26 +109,46 @@ export function MapView({ places, selectedPlace, onSelect }: MapViewProps) {
     markersRef.current = [];
 
     places.forEach((place) => {
-      const markerElement = document.createElement("button");
-      markerElement.type = "button";
-      markerElement.className = `map-marker ${place.category}`;
-      markerElement.setAttribute("aria-label", `Select ${place.name}`);
-      markerElement.dataset.labelPosition = place.labelPosition ?? "right";
-      markerElement.style.setProperty("--label-x", `${place.labelOffset?.[0] ?? 0}px`);
-      markerElement.style.setProperty("--label-y", `${place.labelOffset?.[1] ?? 0}px`);
-      markerElement.title = place.name;
+      const points = place.mapPoints && place.mapPoints.length > 0 ? place.mapPoints : [place];
 
-      const markerLabel = document.createElement("span");
-      markerLabel.textContent = place.name;
-      markerElement.appendChild(markerLabel);
+      points.forEach((point) => {
+        if (point.lat === undefined || point.lng === undefined) return;
 
-      markerElement.addEventListener("click", () => onSelect(place));
+        const markerElement = document.createElement("button");
+        markerElement.type = "button";
+        markerElement.className = `map-marker ${getContinentClass(point)}`;
+        markerElement.setAttribute("aria-label", `Select ${place.name}`);
+        markerElement.title = point.name;
 
-      const marker = new maplibregl.Marker({ element: markerElement, anchor: "center" })
-        .setLngLat([place.lng, place.lat])
-        .addTo(map);
+        const markerLabel = document.createElement("span");
+        markerLabel.textContent = point.name;
+        markerElement.appendChild(markerLabel);
 
-      markersRef.current.push({ id: place.id, marker, element: markerElement });
+        markerElement.addEventListener("click", () => onSelect(place));
+
+        const marker = new maplibregl.Marker({ element: markerElement, anchor: "center" })
+          .setLngLat([point.lng, point.lat])
+          .addTo(map);
+
+        markersRef.current.push({ id: place.id, marker, element: markerElement });
+      });
+    });
+
+    const routeCoordinates = places.flatMap((place) => {
+      const points = place.mapPoints && place.mapPoints.length > 0 ? place.mapPoints : [place];
+      return points
+        .filter((point) => point.lat !== undefined && point.lng !== undefined)
+        .map((point) => [point.lng as number, point.lat as number]);
+    });
+
+    const routeSource = map.getSource("journey-route") as maplibregl.GeoJSONSource | undefined;
+    routeSource?.setData({
+      type: "Feature",
+      properties: {},
+      geometry: {
+        type: "LineString",
+        coordinates: routeCoordinates,
+      },
     });
   }, [places, mapReady, onSelect]);
 
@@ -94,6 +157,20 @@ export function MapView({ places, selectedPlace, onSelect }: MapViewProps) {
       element.classList.toggle("selected", id === selectedPlace.id);
     });
   }, [selectedPlace.id, places]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const primaryPoint = getPrimaryPoint(selectedPlace);
+
+    map.easeTo({
+      center: [primaryPoint?.lng ?? worldCenter[0], primaryPoint?.lat ?? worldCenter[1]],
+      zoom: Math.max(map.getZoom(), getWorldZoom()),
+      duration: 650,
+      easing: (time) => 1 - Math.pow(1 - time, 3),
+      essential: true,
+    });
+  }, [selectedPlace, mapReady]);
 
   return <div ref={containerRef} className="map-view" aria-label="Interactive travel footprint map" />;
 }

@@ -1,111 +1,304 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { FilterBar } from "./components/FilterBar";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Hero } from "./components/Hero";
 import { MapView } from "./components/MapView";
 import { PlaceCard } from "./components/PlaceCard";
+import { StoryPage } from "./components/StoryPage";
 import { places } from "./data/places";
-import { siteConfig } from "./data/site";
-import type { CategoryFilter, Place } from "./types";
+import type { MapPoint, Place } from "./types";
 
-const categoryLabels: Record<Exclude<CategoryFilter, "all">, string> = {
-  lived: "Lived",
-  worked: "Worked",
-  stayed: "Stayed",
-  visited: "Visited",
-  "still-mapping": "Still Mapping",
-};
+const sinceYear = "2015";
+const selectedPlaceStorageKey = "pretty-little-maps:selected-place";
 
-const categoryNotes: Record<Exclude<CategoryFilter, "all">, string> = {
-  lived: "Places I called home",
-  worked: "Places I built and learned",
-  stayed: "Places I rested and reset",
-  visited: "Places I explored",
-  "still-mapping": "The world is still open",
-};
+function getStartYear(place: Place) {
+  const match = place.year.match(/\d{4}/);
+  return match ? match[0] : sinceYear;
+}
 
-export default function App() {
-  const [activeFilter, setActiveFilter] = useState<CategoryFilter>("all");
-  const [selectedPlace, setSelectedPlace] = useState<Place>(places[0]);
+function getTimelinePlaces() {
+  return places.filter((place) => {
+    const year = getStartYear(place);
+    return Number(year) >= Number(sinceYear);
+  });
+}
 
-  const filteredPlaces = useMemo(() => {
-    if (activeFilter === "all") return places;
-    return places.filter((place) => place.category === activeFilter);
-  }, [activeFilter]);
+function getDurationClass(place: Place) {
+  const years = place.year.match(/\d{4}/g)?.map(Number);
+  if (!years || years.length < 2) return "short";
+  const duration = years[1] - years[0];
+  if (duration >= 3) return "long";
+  if (duration >= 1) return "medium";
+  return "short";
+}
+
+function getCountryCount(visiblePlaces: Place[]) {
+  return new Set(getActualMapPlaces(visiblePlaces).map((place) => place.country)).size;
+}
+
+function getPlaceCount(visiblePlaces: Place[]) {
+  return new Set(getActualMapPlaces(visiblePlaces).map((place) => `${place.name}, ${place.country}`)).size;
+}
+
+function getActualMapPlaces(visiblePlaces: Place[]): MapPoint[] {
+  return visiblePlaces.flatMap((place) => {
+    if (place.mapPoints && place.mapPoints.length > 0) return place.mapPoints;
+    return [{ id: place.id, name: place.name, country: place.country, lat: place.lat, lng: place.lng }];
+  });
+}
+
+function getStartTime(place: Place) {
+  return new Date(`${place.startDate.length === 4 ? `${place.startDate}-01` : place.startDate}-01`).getTime();
+}
+
+function getLatestFeaturedPlace(visiblePlaces: Place[]) {
+  return [...visiblePlaces]
+    .filter((place) => place.featured)
+    .sort((a, b) => getStartTime(b) - getStartTime(a))[0];
+}
+
+function hasRealPreviewImage(place: Place) {
+  return Boolean(place.photo?.startsWith("/images/stories/"));
+}
+
+function hasMeaningfulStoryContent(place: Place) {
+  return Boolean(place.hasStory && ((place.story?.blocks.length ?? 0) > 0 || hasRealPreviewImage(place)));
+}
+
+function getStorySlugFromPath() {
+  const match = window.location.pathname.match(/^\/stories\/([^/]+)\/?$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function getTimelineColor(place: Place) {
+  if (place.country.includes("United States") || place.country.includes("Canada")) return "north-america";
+  if (place.country.includes("Peru") || place.country.includes("Chile") || place.country.includes("Argentina")) {
+    return "south-america";
+  }
+  if (place.country.includes("Japan") || place.country.includes("China") || place.country.includes("Indonesia")) {
+    return "asia";
+  }
+  if (place.country.includes("Antarctica")) return "antarctica";
+  return "europe";
+}
+
+function Timeline({
+  visiblePlaces,
+  selectedPlace,
+  expandedYears,
+  onToggleYear,
+  onSelect,
+}: {
+  visiblePlaces: Place[];
+  selectedPlace: Place;
+  expandedYears: Set<string>;
+  onToggleYear: (year: string) => void;
+  onSelect: (place: Place) => void;
+}) {
+  const itemRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  const groupedPlaces = useMemo(() => {
+    return visiblePlaces.reduce<Record<string, Place[]>>((groups, place) => {
+      const year = getStartYear(place);
+      groups[year] = [...(groups[year] ?? []), place];
+      return groups;
+    }, {});
+  }, [visiblePlaces]);
+
+  const years = Object.keys(groupedPlaces).sort((a, b) => {
+    return Number(b) - Number(a);
+  });
 
   useEffect(() => {
-    if (!filteredPlaces.some((place) => place.id === selectedPlace.id)) {
-      setSelectedPlace(filteredPlaces[0] ?? places[0]);
+    itemRefs.current[selectedPlace.id]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [selectedPlace.id, expandedYears]);
+
+  return (
+    <section className="timeline-panel" id="journey" aria-label="Timeline">
+      <div className="module-header">
+        <p>Timeline</p>
+      </div>
+      <div className="timeline-scroll">
+        {years.map((year) => {
+          const yearPlaces = groupedPlaces[year];
+          const isExpanded = expandedYears.has(year);
+
+          return (
+            <section className="timeline-year-group" key={year}>
+              <button className="year-toggle" type="button" onClick={() => onToggleYear(year)}>
+                <span>{year}</span>
+                <small>{yearPlaces.length} entries</small>
+              </button>
+
+              {isExpanded ? (
+                <div className="timeline-items">
+                  {yearPlaces.map((place) => (
+                    <button
+                      className={`timeline-item ${selectedPlace.id === place.id ? "selected" : ""} ${getDurationClass(place)} ${getTimelineColor(place)}`}
+                      key={place.id}
+                      ref={(element: HTMLButtonElement | null) => {
+                        itemRefs.current[place.id] = element;
+                      }}
+                      type="button"
+                      onClick={() => onSelect(place)}
+                    >
+                      <span className="timeline-month">{place.dateLabel}</span>
+                      <span className="timeline-dot" />
+                      <span className="timeline-copy">
+                        <strong>{place.name}</strong>
+                        <small>{place.country}</small>
+                        <em>{place.note}</em>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </section>
+          );
+        })}
+      </div>
+      <button className="timeline-link" type="button">View full timeline</button>
+    </section>
+  );
+}
+
+export default function App() {
+  const timelinePlaces = useMemo(() => getTimelinePlaces(), []);
+  const latestYear = useMemo(() => {
+    return Math.max(...timelinePlaces.map((place) => Number(getStartYear(place)))).toString();
+  }, [timelinePlaces]);
+  const latestFeaturedPlace = useMemo(() => getLatestFeaturedPlace(timelinePlaces), [timelinePlaces]);
+  const storedSelectedPlace = useMemo(() => {
+    const storedId = window.sessionStorage.getItem(selectedPlaceStorageKey);
+    return timelinePlaces.find((place) => place.id === storedId);
+  }, [timelinePlaces]);
+  const initialPlace = storedSelectedPlace ?? latestFeaturedPlace ?? timelinePlaces.find((place) => getStartYear(place) === latestYear) ?? timelinePlaces[0] ?? places[0];
+  const [selectedPlace, setSelectedPlace] = useState<Place>(initialPlace);
+  const [mapOpen, setMapOpen] = useState(false);
+  const [expandedYears, setExpandedYears] = useState<Set<string>>(() => new Set([latestYear]));
+  const [storySlug, setStorySlug] = useState<string | null>(() => getStorySlugFromPath());
+
+  const storyPlaces = useMemo(() => {
+    const storyEntries = [...timelinePlaces]
+      .filter((place) => hasMeaningfulStoryContent(place))
+      .sort((a, b) => getStartTime(b) - getStartTime(a));
+    if (hasMeaningfulStoryContent(selectedPlace) && !storyEntries.some((place) => place.id === selectedPlace.id)) {
+      return [selectedPlace, ...storyEntries];
     }
-  }, [filteredPlaces, selectedPlace.id]);
+    return storyEntries;
+  }, [selectedPlace, timelinePlaces]);
+
+  const currentStoryPlace = useMemo(() => {
+    if (!storySlug) return null;
+    return timelinePlaces.find((place) => place.story?.slug === storySlug) ?? null;
+  }, [storySlug, timelinePlaces]);
+
+  const relatedStoryPlaces = useMemo(() => {
+    if (!currentStoryPlace?.story) return [];
+    const relatedIds = currentStoryPlace.story.relatedEntryIds ?? currentStoryPlace.story.relatedPlaceIds ?? [];
+    return relatedIds
+      .map((id) => timelinePlaces.find((place) => place.id === id))
+      .filter((place): place is Place => Boolean(place?.hasStory));
+  }, [currentStoryPlace, timelinePlaces]);
+
+  useEffect(() => {
+    const year = getStartYear(selectedPlace);
+    setExpandedYears((current: Set<string>) => {
+      if (current.has(year)) return current;
+      return new Set([...current, year]);
+    });
+  }, [selectedPlace]);
+
+  useEffect(() => {
+    const handlePopState = () => setStorySlug(getStorySlugFromPath());
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   const handleSelectPlace = useCallback((place: Place) => {
+    window.sessionStorage.setItem(selectedPlaceStorageKey, place.id);
     setSelectedPlace(place);
   }, []);
 
+  const handleToggleYear = useCallback((year: string) => {
+    setExpandedYears((current: Set<string>) => {
+      const next = new Set(current);
+      if (next.has(year)) {
+        next.delete(year);
+      } else {
+        next.add(year);
+      }
+      return next;
+    });
+  }, []);
+
+  if (storySlug) {
+    if (currentStoryPlace) {
+      return (
+        <StoryPage
+          place={currentStoryPlace}
+          relatedPlaces={relatedStoryPlaces}
+          onSelectPlace={handleSelectPlace}
+        />
+      );
+    }
+
+    return (
+      <main className="story-page">
+        <header className="story-header">
+          <a className="story-wordmark" href="/">
+            Pretty Little Maps
+          </a>
+          <a className="story-back" href="/#stories">
+            ← Back to atlas
+          </a>
+        </header>
+        <article className="story-article">
+          <h1>Story not found</h1>
+          <p className="story-empty">This Story is not available yet.</p>
+        </article>
+      </main>
+    );
+  }
+
   return (
     <main className="app-shell">
-      <div className="top-line">
-        <Hero />
-        <FilterBar activeFilter={activeFilter} places={places} onChange={setActiveFilter} />
-      </div>
+      <Hero placeCount={getPlaceCount(timelinePlaces)} countryCount={getCountryCount(timelinePlaces)} sinceYear={sinceYear} />
 
-      <section className="map-layout">
-        <div className="map-panel">
-          <MapView places={filteredPlaces} selectedPlace={selectedPlace} onSelect={handleSelectPlace} />
-          <div className="map-legend" aria-label="Map category legend">
-            <p>Legend</p>
-            {Object.entries(categoryLabels).map(([category, label]) => (
-              <span key={category}>
-                <i className={`legend-dot ${category}`} />
-                {label}
-              </span>
+      <section className="atlas-layout">
+        <Timeline
+          visiblePlaces={timelinePlaces}
+          selectedPlace={selectedPlace}
+          expandedYears={expandedYears}
+          onToggleYear={handleToggleYear}
+          onSelect={handleSelectPlace}
+        />
+
+        <section className={`map-section ${mapOpen ? "open" : ""}`} id="map" aria-label="Journey map">
+          <button className="map-toggle" type="button" onClick={() => setMapOpen((open: boolean) => !open)}>
+            {mapOpen ? "Hide map" : "View map"}
+          </button>
+          <div className="map-panel">
+            <MapView places={timelinePlaces} selectedPlace={selectedPlace} onSelect={handleSelectPlace} />
+          </div>
+        </section>
+
+        <aside className="story-panel" id="stories">
+          <div className="module-header">
+            <p>Stories</p>
+            <button type="button">View all</button>
+          </div>
+          <div className="story-list">
+            {storyPlaces.map((place) => (
+              <PlaceCard
+                key={place.id}
+                place={place}
+                month={place.dateLabel}
+                selected={selectedPlace.id === place.id}
+                onSelect={handleSelectPlace}
+              />
             ))}
           </div>
-        </div>
-
-        <aside className="side-panel">
-          <PlaceCard place={selectedPlace} />
         </aside>
       </section>
-
-      <section className="editorial-grid" aria-label="Travel archive notes">
-        <article className="editorial-card chapter-card">
-          <div>
-            <p className="card-kicker">A map of life</p>
-            <h2>Not just places. Chapters.</h2>
-            <p>
-              Some places shape you. Some heal you. Some challenge you. Some stay with you quietly.
-            </p>
-          </div>
-          <div className="photo-stack" aria-hidden="true">
-            <img src="/places/ann-arbor.svg" alt="" />
-            <img src="/places/patagonia.svg" alt="" />
-            <img src="/places/canggu.svg" alt="" />
-          </div>
-        </article>
-
-        <article className="editorial-card category-card">
-          <p className="card-kicker">The categories</p>
-          <div className="category-note-list">
-            {Object.entries(categoryLabels).map(([category, label]) => (
-              <span key={category}>
-                <i className={`legend-dot ${category}`} />
-                <strong>{label}</strong>
-                <small>{categoryNotes[category as Exclude<CategoryFilter, "all">]}</small>
-              </span>
-            ))}
-          </div>
-        </article>
-
-        <article className="editorial-card still-card">
-          <p className="card-kicker">Still mapping</p>
-          <div className="mini-world" aria-hidden="true" />
-          <p>The world is big. The map is never really done. I'm still mapping.</p>
-          <p className="closing-line">so much left to be lived</p>
-        </article>
-      </section>
-
-      <footer className="site-footer">{siteConfig.footer}</footer>
     </main>
   );
 }

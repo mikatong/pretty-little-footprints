@@ -3,10 +3,7 @@ import type { CategoryFilter, Place } from "../types";
 const filters: { value: CategoryFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "lived", label: "Lived" },
-  { value: "worked", label: "Worked" },
-  { value: "stayed", label: "Stayed" },
-  { value: "visited", label: "Visited" },
-  { value: "still-mapping", label: "Still Mapping" },
+  { value: "travel", label: "Travel" },
 ];
 
 type FilterBarProps = {
