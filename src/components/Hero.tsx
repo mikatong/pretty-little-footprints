@@ -1,12 +1,19 @@
+import type { Place } from "../types";
+
 type HeroProps = {
   placeCount: number;
   countryCount: number;
   sinceYear: string;
+  selectedPlace: Place;
 };
 
-export function Hero({ placeCount, countryCount, sinceYear }: HeroProps) {
+export function Hero({ placeCount, countryCount, sinceYear, selectedPlace }: HeroProps) {
+  const heroStyle = selectedPlace.photo
+    ? ({ "--hero-image": `url("${selectedPlace.photo}")` } as Record<string, string>)
+    : undefined;
+
   return (
-    <header className="hero">
+    <header className="hero" style={heroStyle}>
       <nav className="hero-nav" aria-label="Primary">
         <span aria-hidden="true" />
         <div>
@@ -35,6 +42,10 @@ export function Hero({ placeCount, countryCount, sinceYear }: HeroProps) {
             <dd>{sinceYear}</dd>
           </div>
         </dl>
+      </div>
+      <div className="hero-destination" aria-label="Selected destination">
+        <strong>{selectedPlace.name}</strong>
+        <span>{selectedPlace.category === "lived" ? "lived" : "visited"}</span>
       </div>
     </header>
   );

@@ -4,10 +4,16 @@ import { MapView } from "./components/MapView";
 import { PlaceCard } from "./components/PlaceCard";
 import { StoryPage } from "./components/StoryPage";
 import { places } from "./data/places";
+import {
+  getLatestMeaningfulFeaturedStory,
+  getMeaningfulStories,
+  getStartTime,
+  hasMeaningfulStoryContent,
+  selectedPlaceStorageKey,
+} from "./storyUtils";
 import type { MapPoint, Place } from "./types";
 
 const sinceYear = "2015";
-const selectedPlaceStorageKey = "pretty-little-maps:selected-place";
 
 function getStartYear(place: Place) {
   const match = place.year.match(/\d{4}/);
@@ -45,27 +51,34 @@ function getActualMapPlaces(visiblePlaces: Place[]): MapPoint[] {
   });
 }
 
-function getStartTime(place: Place) {
-  return new Date(`${place.startDate.length === 4 ? `${place.startDate}-01` : place.startDate}-01`).getTime();
-}
-
-function getLatestFeaturedPlace(visiblePlaces: Place[]) {
-  return [...visiblePlaces]
-    .filter((place) => place.featured)
-    .sort((a, b) => getStartTime(b) - getStartTime(a))[0];
-}
-
-function hasRealPreviewImage(place: Place) {
-  return Boolean(place.photo?.startsWith("/images/stories/"));
-}
-
-function hasMeaningfulStoryContent(place: Place) {
-  return Boolean(place.hasStory && ((place.story?.blocks.length ?? 0) > 0 || hasRealPreviewImage(place)));
-}
-
 function getStorySlugFromPath() {
   const match = window.location.pathname.match(/^\/stories\/([^/]+)\/?$/);
   return match ? decodeURIComponent(match[1]) : null;
+}
+
+function hasKnownMonth(place: Place) {
+  return /^\d{4}-\d{2}/.test(place.startDate);
+}
+
+function sortTimelinePlaces(visiblePlaces: Place[]) {
+  return visiblePlaces
+    .map((place, index) => ({ place, index }))
+    .sort((a, b) => {
+      const yearDelta = Number(getStartYear(b.place)) - Number(getStartYear(a.place));
+      if (yearDelta !== 0) return yearDelta;
+
+      const aHasMonth = hasKnownMonth(a.place);
+      const bHasMonth = hasKnownMonth(b.place);
+      if (aHasMonth !== bHasMonth) return aHasMonth ? -1 : 1;
+
+      if (aHasMonth && bHasMonth) {
+        const monthDelta = getStartTime(b.place) - getStartTime(a.place);
+        if (monthDelta !== 0) return monthDelta;
+      }
+
+      return a.index - b.index;
+    })
+    .map(({ place }) => place);
 }
 
 function getTimelineColor(place: Place) {
@@ -85,18 +98,20 @@ function Timeline({
   selectedPlace,
   expandedYears,
   onToggleYear,
+  onActivateYear,
   onSelect,
 }: {
   visiblePlaces: Place[];
   selectedPlace: Place;
   expandedYears: Set<string>;
   onToggleYear: (year: string) => void;
+  onActivateYear: (year: string) => void;
   onSelect: (place: Place) => void;
 }) {
   const itemRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const groupedPlaces = useMemo(() => {
-    return visiblePlaces.reduce<Record<string, Place[]>>((groups, place) => {
+    return sortTimelinePlaces(visiblePlaces).reduce<Record<string, Place[]>>((groups, place) => {
       const year = getStartYear(place);
       groups[year] = [...(groups[year] ?? []), place];
       return groups;
@@ -123,7 +138,16 @@ function Timeline({
 
           return (
             <section className="timeline-year-group" key={year}>
-              <button className="year-toggle" type="button" onClick={() => onToggleYear(year)}>
+              <button
+                className="year-toggle"
+                type="button"
+                aria-expanded={isExpanded}
+                aria-label={`${isExpanded ? "Collapse" : "Expand"} ${year} timeline entries`}
+                onClick={() => {
+                  onActivateYear(year);
+                  onToggleYear(year);
+                }}
+              >
                 <span>{year}</span>
                 <small>{yearPlaces.length} entries</small>
               </button>
@@ -165,26 +189,27 @@ export default function App() {
   const latestYear = useMemo(() => {
     return Math.max(...timelinePlaces.map((place) => Number(getStartYear(place)))).toString();
   }, [timelinePlaces]);
-  const latestFeaturedPlace = useMemo(() => getLatestFeaturedPlace(timelinePlaces), [timelinePlaces]);
+  const latestFeaturedPlace = useMemo(() => getLatestMeaningfulFeaturedStory(timelinePlaces), [timelinePlaces]);
   const storedSelectedPlace = useMemo(() => {
     const storedId = window.sessionStorage.getItem(selectedPlaceStorageKey);
     return timelinePlaces.find((place) => place.id === storedId);
   }, [timelinePlaces]);
   const initialPlace = storedSelectedPlace ?? latestFeaturedPlace ?? timelinePlaces.find((place) => getStartYear(place) === latestYear) ?? timelinePlaces[0] ?? places[0];
   const [selectedPlace, setSelectedPlace] = useState<Place>(initialPlace);
+  const [activeYear, setActiveYear] = useState(() => getStartYear(initialPlace));
   const [mapOpen, setMapOpen] = useState(false);
   const [expandedYears, setExpandedYears] = useState<Set<string>>(() => new Set([latestYear]));
   const [storySlug, setStorySlug] = useState<string | null>(() => getStorySlugFromPath());
 
   const storyPlaces = useMemo(() => {
-    const storyEntries = [...timelinePlaces]
-      .filter((place) => hasMeaningfulStoryContent(place))
-      .sort((a, b) => getStartTime(b) - getStartTime(a));
+    const storyEntries = getMeaningfulStories(timelinePlaces).reverse();
     if (hasMeaningfulStoryContent(selectedPlace) && !storyEntries.some((place) => place.id === selectedPlace.id)) {
       return [selectedPlace, ...storyEntries];
     }
     return storyEntries;
   }, [selectedPlace, timelinePlaces]);
+
+  const meaningfulStories = useMemo(() => getMeaningfulStories(timelinePlaces), [timelinePlaces]);
 
   const currentStoryPlace = useMemo(() => {
     if (!storySlug) return null;
@@ -215,6 +240,7 @@ export default function App() {
 
   const handleSelectPlace = useCallback((place: Place) => {
     window.sessionStorage.setItem(selectedPlaceStorageKey, place.id);
+    setActiveYear(getStartYear(place));
     setSelectedPlace(place);
   }, []);
 
@@ -236,6 +262,7 @@ export default function App() {
         <StoryPage
           place={currentStoryPlace}
           relatedPlaces={relatedStoryPlaces}
+          meaningfulStories={meaningfulStories}
           onSelectPlace={handleSelectPlace}
         />
       );
@@ -261,7 +288,12 @@ export default function App() {
 
   return (
     <main className="app-shell">
-      <Hero placeCount={getPlaceCount(timelinePlaces)} countryCount={getCountryCount(timelinePlaces)} sinceYear={sinceYear} />
+      <Hero
+        placeCount={getPlaceCount(timelinePlaces)}
+        countryCount={getCountryCount(timelinePlaces)}
+        sinceYear={sinceYear}
+        selectedPlace={selectedPlace}
+      />
 
       <section className="atlas-layout">
         <Timeline
@@ -269,6 +301,7 @@ export default function App() {
           selectedPlace={selectedPlace}
           expandedYears={expandedYears}
           onToggleYear={handleToggleYear}
+          onActivateYear={setActiveYear}
           onSelect={handleSelectPlace}
         />
 
@@ -277,7 +310,12 @@ export default function App() {
             {mapOpen ? "Hide map" : "View map"}
           </button>
           <div className="map-panel">
-            <MapView places={timelinePlaces} selectedPlace={selectedPlace} onSelect={handleSelectPlace} />
+            <MapView
+              places={timelinePlaces}
+              selectedPlace={selectedPlace}
+              activeYear={activeYear}
+              onSelect={handleSelectPlace}
+            />
           </div>
         </section>
 

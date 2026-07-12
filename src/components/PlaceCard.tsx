@@ -9,20 +9,24 @@ type PlaceCardProps = {
 
 export function PlaceCard({ place, month, selected, onSelect }: PlaceCardProps) {
   const storyUrl = place.story ? `/stories/${place.story.slug}` : undefined;
+  const openStory = () => {
+    onSelect(place);
+    if (storyUrl) window.location.href = storyUrl;
+  };
 
   function handleKeyDown(event: { key: string; preventDefault: () => void }) {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      onSelect(place);
+      openStory();
     }
   }
 
   return (
     <article
       className={`place-card ${selected ? "selected" : ""}`}
-      onClick={() => onSelect(place)}
+      onClick={openStory}
       onKeyDown={handleKeyDown}
-      role="button"
+      role="link"
       tabIndex={0}
       aria-current={selected ? "true" : undefined}
     >
@@ -36,7 +40,13 @@ export function PlaceCard({ place, month, selected, onSelect }: PlaceCardProps) 
         <strong>{place.name}</strong>
         {place.note ? <em>{place.note}</em> : null}
         {place.hasStory && storyUrl ? (
-          <a href={storyUrl} onClick={(event: { stopPropagation: () => void }) => event.stopPropagation()}>
+          <a
+            href={storyUrl}
+            onClick={(event: { stopPropagation: () => void }) => {
+              event.stopPropagation();
+              openStory();
+            }}
+          >
             Read →
           </a>
         ) : null}

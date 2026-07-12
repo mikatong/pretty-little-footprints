@@ -3,6 +3,7 @@ import type { Place, StoryBlock } from "../types";
 type StoryPageProps = {
   place: Place;
   relatedPlaces: Place[];
+  meaningfulStories: Place[];
   onSelectPlace: (place: Place) => void;
 };
 
@@ -52,9 +53,12 @@ function StoryBlockView({ block }: { block: StoryBlock }) {
   return <hr className="story-divider" />;
 }
 
-export function StoryPage({ place, relatedPlaces, onSelectPlace }: StoryPageProps) {
+export function StoryPage({ place, relatedPlaces, meaningfulStories, onSelectPlace }: StoryPageProps) {
   const story = place.story;
   const blocks = story?.blocks ?? [];
+  const storyIndex = meaningfulStories.findIndex((storyPlace) => storyPlace.id === place.id);
+  const previousStory = storyIndex > 0 ? meaningfulStories[storyIndex - 1] : undefined;
+  const nextStory = storyIndex >= 0 && storyIndex < meaningfulStories.length - 1 ? meaningfulStories[storyIndex + 1] : undefined;
 
   return (
     <main className="story-page">
@@ -81,6 +85,24 @@ export function StoryPage({ place, relatedPlaces, onSelectPlace }: StoryPageProp
           )}
         </div>
       </article>
+
+      {(previousStory || nextStory) ? (
+        <nav className="story-nav" aria-label="Story navigation">
+          {previousStory?.story ? (
+            <a href={`/stories/${previousStory.story.slug}`} onClick={() => onSelectPlace(previousStory)}>
+              <small>← Previous</small>
+              <span>{previousStory.story.title ?? previousStory.name}</span>
+            </a>
+          ) : <span aria-hidden="true" />}
+
+          {nextStory?.story ? (
+            <a className="next" href={`/stories/${nextStory.story.slug}`} onClick={() => onSelectPlace(nextStory)}>
+              <small>Next →</small>
+              <span>{nextStory.story.title ?? nextStory.name}</span>
+            </a>
+          ) : <span aria-hidden="true" />}
+        </nav>
+      ) : null}
 
       {relatedPlaces.length > 0 ? (
         <aside className="story-related" aria-label="Related stories">

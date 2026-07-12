@@ -1,5 +1,25 @@
 export type PlaceCategory = "lived" | "travel";
 
+export type MapIconType =
+  | "home"
+  | "city"
+  | "temple"
+  | "mountain"
+  | "snow"
+  | "forest"
+  | "coast"
+  | "tropical"
+  | "desert"
+  | "waterfall"
+  | "landmark"
+  | "default";
+
+export type ImageSource = {
+  type: "user" | "temporary-stock";
+  credit?: string;
+  sourceUrl?: string;
+};
+
 export type StoryBlock =
   | {
       id: string;
@@ -66,6 +86,8 @@ export type Place = {
   hasGuide: boolean;
   story?: Story;
   photo?: string;
+  imageSource?: ImageSource;
+  mapIconType?: MapIconType;
   mapPoints?: MapPoint[];
   links?: {
     label: string;
