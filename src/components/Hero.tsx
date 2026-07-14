@@ -8,12 +8,8 @@ type HeroProps = {
 };
 
 export function Hero({ placeCount, countryCount, sinceYear, selectedPlace }: HeroProps) {
-  const heroStyle = selectedPlace.photo
-    ? ({ "--hero-image": `url("${selectedPlace.photo}")` } as Record<string, string>)
-    : undefined;
-
   return (
-    <header className="hero" style={heroStyle}>
+    <header className="hero">
       <nav className="hero-nav" aria-label="Primary">
         <span aria-hidden="true" />
         <div>
@@ -25,6 +21,7 @@ export function Hero({ placeCount, countryCount, sinceYear, selectedPlace }: Her
       </nav>
 
       <div className="hero-content">
+        <p className="hero-eyebrow">Personal Atlas · Since 2015</p>
         <h1>Pretty Little Maps</h1>
         <p className="hero-title-secondary">A Life in Places</p>
 

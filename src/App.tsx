@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Hero } from "./components/Hero";
 import { MapView } from "./components/MapView";
 import { PlaceCard } from "./components/PlaceCard";
+import { PlaceGlyph } from "./components/PlaceGlyph";
 import { StoryPage } from "./components/StoryPage";
 import { places } from "./data/places";
+import { getPlaceAccent } from "./placePresentation";
 import {
   getLatestMeaningfulFeaturedStory,
   getMeaningfulStories,
@@ -56,6 +58,10 @@ function getStorySlugFromPath() {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+function isTimelinePath(pathname = window.location.pathname) {
+  return pathname.replace(/\/$/, "") === "/timeline";
+}
+
 function hasKnownMonth(place: Place) {
   return /^\d{4}-\d{2}/.test(place.startDate);
 }
@@ -91,6 +97,27 @@ function getTimelineColor(place: Place) {
   }
   if (place.country.includes("Antarctica")) return "antarctica";
   return "europe";
+}
+
+function TimelineInlinePreview({ place }: { place: Place }) {
+  if (!hasMeaningfulStoryContent(place) || !place.story) return null;
+  const accent = getPlaceAccent(place);
+
+  return (
+    <a
+      className="timeline-inline-preview"
+      href={`/stories/${place.story.slug}`}
+      style={{ "--place-accent": accent.primary, "--place-accent-pale": accent.pale } as Record<string, string>}
+    >
+      {place.photo ? <img src={place.photo} alt={`${place.name} story preview`} /> : <PlaceGlyph place={place} className="timeline-preview-glyph" />}
+      <span>
+        <small>{place.dateLabel} · {place.country}</small>
+        <strong>{place.story.title ?? place.name}</strong>
+        {place.story.summary || place.note ? <em>{place.story.summary || place.note}</em> : null}
+        <b>Read story →</b>
+      </span>
+    </a>
+  );
 }
 
 function Timeline({
@@ -154,33 +181,78 @@ function Timeline({
 
               {isExpanded ? (
                 <div className="timeline-items">
-                  {yearPlaces.map((place) => (
-                    <button
-                      className={`timeline-item ${selectedPlace.id === place.id ? "selected" : ""} ${getDurationClass(place)} ${getTimelineColor(place)}`}
-                      key={place.id}
-                      ref={(element: HTMLButtonElement | null) => {
-                        itemRefs.current[place.id] = element;
-                      }}
-                      type="button"
-                      onClick={() => onSelect(place)}
-                    >
-                      <span className="timeline-month">{place.dateLabel}</span>
-                      <span className="timeline-dot" />
-                      <span className="timeline-copy">
-                        <strong>{place.name}</strong>
-                        <small>{place.country}</small>
-                        <em>{place.note}</em>
-                      </span>
-                    </button>
-                  ))}
+                  {yearPlaces.map((place) => {
+                    const selected = selectedPlace.id === place.id;
+                    return (
+                      <article className="timeline-entry" key={place.id}>
+                        <button
+                          className={`timeline-item ${selected ? "selected" : ""} ${getDurationClass(place)} ${getTimelineColor(place)}`}
+                          style={{ "--place-accent": getPlaceAccent(place).primary } as Record<string, string>}
+                          ref={(element: HTMLButtonElement | null) => {
+                            itemRefs.current[place.id] = element;
+                          }}
+                          type="button"
+                          aria-expanded={selected && hasMeaningfulStoryContent(place) ? "true" : undefined}
+                          onClick={() => onSelect(place)}
+                        >
+                          <span className="timeline-month">{place.dateLabel}</span>
+                          <span className="timeline-dot" />
+                          <PlaceGlyph place={place} className="timeline-glyph" />
+                          <span className="timeline-copy">
+                            <strong>{place.name}</strong>
+                            <small>{place.country}</small>
+                            <em>{place.note}</em>
+                          </span>
+                        </button>
+                        {selected ? <TimelineInlinePreview place={place} /> : null}
+                      </article>
+                    );
+                  })}
                 </div>
               ) : null}
             </section>
           );
         })}
       </div>
-      <button className="timeline-link" type="button">View full timeline</button>
+      <a className="timeline-link" href="/timeline">View full timeline</a>
     </section>
+  );
+}
+
+function FullTimelinePage({
+  visiblePlaces,
+  selectedPlace,
+  expandedYears,
+  onToggleYear,
+  onActivateYear,
+  onSelect,
+}: {
+  visiblePlaces: Place[];
+  selectedPlace: Place;
+  expandedYears: Set<string>;
+  onToggleYear: (year: string) => void;
+  onActivateYear: (year: string) => void;
+  onSelect: (place: Place) => void;
+}) {
+  return (
+    <main className="full-timeline-page">
+      <header className="story-header">
+        <a className="story-wordmark" href="/">
+          Pretty Little Maps
+        </a>
+        <a className="story-back" href="/">
+          ← Back to atlas
+        </a>
+      </header>
+      <Timeline
+        visiblePlaces={visiblePlaces}
+        selectedPlace={selectedPlace}
+        expandedYears={expandedYears}
+        onToggleYear={onToggleYear}
+        onActivateYear={onActivateYear}
+        onSelect={onSelect}
+      />
+    </main>
   );
 }
 
@@ -199,7 +271,8 @@ export default function App() {
   const [activeYear, setActiveYear] = useState(() => getStartYear(initialPlace));
   const [mapOpen, setMapOpen] = useState(false);
   const [expandedYears, setExpandedYears] = useState<Set<string>>(() => new Set([latestYear]));
-  const [storySlug, setStorySlug] = useState<string | null>(() => getStorySlugFromPath());
+  const [routePath, setRoutePath] = useState(() => window.location.pathname);
+  const storySlug = useMemo(() => getStorySlugFromPath(), [routePath]);
 
   const storyPlaces = useMemo(() => {
     const storyEntries = getMeaningfulStories(timelinePlaces).reverse();
@@ -233,7 +306,13 @@ export default function App() {
   }, [selectedPlace]);
 
   useEffect(() => {
-    const handlePopState = () => setStorySlug(getStorySlugFromPath());
+    if (!isTimelinePath(routePath)) return;
+    const years = new Set(timelinePlaces.map(getStartYear));
+    setExpandedYears(years);
+  }, [routePath, timelinePlaces]);
+
+  useEffect(() => {
+    const handlePopState = () => setRoutePath(window.location.pathname);
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
@@ -255,6 +334,19 @@ export default function App() {
       return next;
     });
   }, []);
+
+  if (isTimelinePath(routePath)) {
+    return (
+      <FullTimelinePage
+        visiblePlaces={timelinePlaces}
+        selectedPlace={selectedPlace}
+        expandedYears={expandedYears}
+        onToggleYear={handleToggleYear}
+        onActivateYear={setActiveYear}
+        onSelect={handleSelectPlace}
+      />
+    );
+  }
 
   if (storySlug) {
     if (currentStoryPlace) {
@@ -314,28 +406,29 @@ export default function App() {
               places={timelinePlaces}
               selectedPlace={selectedPlace}
               activeYear={activeYear}
+              meaningfulStories={meaningfulStories}
               onSelect={handleSelectPlace}
             />
           </div>
-        </section>
 
-        <aside className="story-panel" id="stories">
-          <div className="module-header">
-            <p>Stories</p>
-            <button type="button">View all</button>
-          </div>
-          <div className="story-list">
-            {storyPlaces.map((place) => (
-              <PlaceCard
-                key={place.id}
-                place={place}
-                month={place.dateLabel}
-                selected={selectedPlace.id === place.id}
-                onSelect={handleSelectPlace}
-              />
-            ))}
-          </div>
-        </aside>
+          <aside className="story-panel" id="stories">
+            <div className="module-header">
+              <p>Featured Stories</p>
+              <button type="button">View all →</button>
+            </div>
+            <div className="story-list">
+              {storyPlaces.map((place) => (
+                <PlaceCard
+                  key={place.id}
+                  place={place}
+                  month={place.dateLabel}
+                  selected={selectedPlace.id === place.id}
+                  onSelect={handleSelectPlace}
+                />
+              ))}
+            </div>
+          </aside>
+        </section>
       </section>
     </main>
   );
