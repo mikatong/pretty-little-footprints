@@ -98,53 +98,22 @@ Story pages live at:
 /stories/:slug
 ```
 
-Story content is edited directly in:
+Story content is edited in:
 
 ```text
-src/data/places.ts
+src/data/stories.ts
 ```
 
-Each entry can opt into a Story page with these flags:
-
-```ts
-hasStory: true,
-featured: false,
-hasGuide: false,
-story: {
-  slug: "patagonia",
-  blocks: [
-    { id: "patagonia-note", type: "text", content: "A place that rewards slowing down." },
-  ],
-}
-```
-
-Local Story images should be organized by slug:
+Story photos live in:
 
 ```text
-public/images/stories/patagonia/cover.jpg
-public/images/stories/patagonia/01.jpg
-public/images/stories/canggu/01.jpg
+public/images/stories/<slug>/
 ```
 
-Use lowercase folder names that match each Story slug. Prefer simple file names like `cover.jpg`, `01.jpg`, `02.jpg`, and `gallery-01.jpg`. Recommended image dimensions are 1600 x 1200 for landscape images, or at least 1400px wide for full-width Story images.
+See the short authoring guide:
 
-Add a single image block:
-
-```ts
-{ id: "patagonia-cover", type: "image", src: "/images/stories/patagonia/cover.jpg", alt: "Patagonia mountains", caption: "A quiet morning in Patagonia." }
-```
-
-Add a gallery block:
-
-```ts
-{
-  id: "patagonia-gallery",
-  type: "gallery",
-  images: [
-    { src: "/images/stories/patagonia/01.jpg", alt: "Mountain view" },
-    { src: "/images/stories/patagonia/02.jpg", alt: "Trail view" },
-  ],
-}
+```text
+AUTHORING.md
 ```
 
 Story data references images explicitly. The app does not scan folders automatically.

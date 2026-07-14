@@ -291,6 +291,7 @@ img {
 }
 
 .module-header button,
+.module-header a,
 .timeline-link {
   padding: 0;
   color: var(--text);

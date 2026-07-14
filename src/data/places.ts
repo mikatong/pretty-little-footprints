@@ -1,15 +1,22 @@
 import type { Place } from "../types";
+import { storiesByPlaceId } from "./stories";
 
 type PlaceInput = Omit<Place, "hasStory" | "featured" | "hasGuide"> &
   Partial<Pick<Place, "hasStory" | "featured" | "hasGuide">>;
 
 function withStoryDefaults(entries: PlaceInput[]): Place[] {
-  return entries.map((entry) => ({
-    hasStory: false,
-    featured: false,
-    hasGuide: false,
-    ...entry
-  }));
+  return entries.map((entry) => {
+    const story = storiesByPlaceId.get(entry.id);
+    return {
+      hasGuide: false,
+      ...entry,
+      story: story ?? entry.story,
+      hasStory: Boolean(story ?? entry.story ?? entry.hasStory),
+      featured: story?.featured ?? entry.featured ?? false,
+      photo: story?.previewImage ?? story?.coverImage ?? entry.photo,
+      imageSource: story?.imageSource ?? entry.imageSource,
+    };
+  });
 }
 
 export const places: Place[] = withStoryDefaults([
@@ -26,10 +33,6 @@ export const places: Place[] = withStoryDefaults([
     year: "2015-2017",
     note: "Where everything unfamiliar slowly became normal.",
     hasStory: true,
-    story: {
-      slug: "west-vancouver",
-      blocks: [{ id: "west-vancouver-text", type: "text", content: "Where everything unfamiliar slowly became normal." }]
-    },
     photo: "/places/waterloo.svg"
   },
   {
@@ -154,10 +157,6 @@ export const places: Place[] = withStoryDefaults([
     year: "2017-2021",
     note: "Where curiosity became a habit.",
     hasStory: true,
-    story: {
-      slug: "waterloo",
-      blocks: [{ id: "waterloo-text", type: "text", content: "Where curiosity became a habit." }]
-    },
     photo: "/places/waterloo.svg"
   },
   {
@@ -308,10 +307,6 @@ export const places: Place[] = withStoryDefaults([
     year: "2021-2023",
     note: "Two years of statistics, quiet libraries, and new beginnings.",
     hasStory: true,
-    story: {
-      slug: "ann-arbor",
-      blocks: [{ id: "ann-arbor-text", type: "text", content: "Two years of statistics, quiet libraries, and new beginnings." }]
-    },
     photo: "/places/ann-arbor.svg"
   },
   {
@@ -715,10 +710,6 @@ export const places: Place[] = withStoryDefaults([
     year: "2023-2026",
     note: "Where research became everyday life.",
     hasStory: true,
-    story: {
-      slug: "mountain-view",
-      blocks: [{ id: "mountain-view-text", type: "text", content: "Where research became everyday life." }]
-    },
     photo: "/places/palo-alto.svg"
   },
   {
@@ -773,10 +764,6 @@ export const places: Place[] = withStoryDefaults([
     note: "Cold air, long roads, and landscapes that hardly felt real.",
     hasStory: true,
     featured: true,
-    story: {
-      slug: "iceland",
-      blocks: [{ id: "iceland-text", type: "text", content: "Cold air, long roads, and landscapes that hardly felt real." }]
-    },
     photo: "/places/patagonia.svg"
   },
   {
@@ -1108,18 +1095,6 @@ export const places: Place[] = withStoryDefaults([
     year: "2025",
     note: "",
     hasStory: true,
-    story: {
-      slug: "beijing",
-      title: "Beijing",
-      blocks: [
-        {
-          id: "beijing-cover",
-          type: "image",
-          src: "/images/stories/beijing/cover.jpg",
-          alt: "Portrait by a red palace wall in Beijing"
-        }
-      ]
-    },
     photo: "/images/stories/beijing/cover.jpg"
   },
   {
@@ -1190,10 +1165,6 @@ export const places: Place[] = withStoryDefaults([
     year: "2026",
     note: "One coastline I'll never get tired of.",
     hasStory: true,
-    story: {
-      slug: "big-sur",
-      blocks: [{ id: "big-sur-text", type: "text", content: "One coastline I'll never get tired of." }]
-    },
     photo: "/places/palo-alto.svg"
   },
   {
@@ -1235,10 +1206,6 @@ export const places: Place[] = withStoryDefaults([
     note: "A place that rewards slowing down.",
     hasStory: true,
     featured: true,
-    story: {
-      slug: "patagonia",
-      blocks: [{ id: "patagonia-text", type: "text", content: "A place that rewards slowing down." }]
-    },
     photo: "/places/patagonia.svg",
     mapPoints: [
       { id: "punta-arenas", name: "Punta Arenas", country: "Chile", lat: -53.1638, lng: -70.9171 },
@@ -1258,10 +1225,6 @@ export const places: Place[] = withStoryDefaults([
     note: "Where silence feels different.",
     hasStory: true,
     featured: true,
-    story: {
-      slug: "antarctica",
-      blocks: [{ id: "antarctica-text", type: "text", content: "Where silence feels different." }]
-    },
     photo: "/places/antarctica.svg"
   },
   {
@@ -1277,10 +1240,6 @@ export const places: Place[] = withStoryDefaults([
     note: "History, mountains, and mornings above the clouds.",
     hasStory: true,
     featured: true,
-    story: {
-      slug: "peru",
-      blocks: [{ id: "peru-text", type: "text", content: "History, mountains, and mornings above the clouds." }]
-    },
     photo: "/places/machu-picchu.svg",
     mapPoints: [
       { id: "lima", name: "Lima", country: "Peru", lat: -12.0464, lng: -77.0428 },
@@ -1384,10 +1343,6 @@ export const places: Place[] = withStoryDefaults([
     hasStory: true,
     featured: true,
     hasGuide: true,
-    story: {
-      slug: "canggu",
-      blocks: [{ id: "canggu-text", type: "text", content: "Days built around coffee, movement, and the ocean." }]
-    },
     photo: "/places/canggu.svg"
   },
   {
@@ -1430,10 +1385,6 @@ export const places: Place[] = withStoryDefaults([
     hasStory: true,
     featured: true,
     hasGuide: true,
-    story: {
-      slug: "chengdu",
-      blocks: []
-    },
     photo: "/places/chengdu.svg"
   }
 ]);

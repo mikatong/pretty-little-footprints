@@ -11,6 +11,8 @@ type PlaceCardProps = {
 
 export function PlaceCard({ place, month, selected, onSelect }: PlaceCardProps) {
   const storyUrl = place.story ? `/stories/${place.story.slug}` : undefined;
+  const previewText = place.story?.previewSummary ?? place.story?.dek ?? place.note;
+  const previewImage = place.story?.previewImage ?? place.story?.coverImage ?? place.photo;
   const accent = getPlaceAccent(place);
   const openStory = () => {
     onSelect(place);
@@ -35,14 +37,14 @@ export function PlaceCard({ place, month, selected, onSelect }: PlaceCardProps) 
       aria-current={selected ? "true" : undefined}
     >
       <div className="photo-wrap">
-        {place.photo ? <img src={place.photo} alt={`${place.name} travel memory`} /> : null}
+        {previewImage ? <img src={previewImage} alt={`${place.name} travel memory`} /> : null}
       </div>
       <span className="place-card-body">
         <small>
           {month} · {place.country}
         </small>
         <strong><PlaceGlyph place={place} className="story-card-icon" />{place.name}</strong>
-        {place.note ? <em>{place.note}</em> : null}
+        {previewText ? <em>{previewText}</em> : null}
         {place.hasStory && storyUrl ? (
           <a
             href={storyUrl}

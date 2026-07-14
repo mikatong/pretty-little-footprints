@@ -7,6 +7,7 @@ import { StoryPage } from "./components/StoryPage";
 import { places } from "./data/places";
 import { getPlaceAccent } from "./placePresentation";
 import {
+  getFeaturedStories,
   getLatestMeaningfulFeaturedStory,
   getMeaningfulStories,
   getStartTime,
@@ -62,6 +63,10 @@ function isTimelinePath(pathname = window.location.pathname) {
   return pathname.replace(/\/$/, "") === "/timeline";
 }
 
+function isStoriesArchivePath(pathname = window.location.pathname) {
+  return pathname.replace(/\/$/, "") === "/stories";
+}
+
 function hasKnownMonth(place: Place) {
   return /^\d{4}-\d{2}/.test(place.startDate);
 }
@@ -102,6 +107,8 @@ function getTimelineColor(place: Place) {
 function TimelineInlinePreview({ place }: { place: Place }) {
   if (!hasMeaningfulStoryContent(place) || !place.story) return null;
   const accent = getPlaceAccent(place);
+  const previewImage = place.story.previewImage ?? place.story.coverImage ?? place.photo;
+  const previewText = place.story.previewSummary ?? place.story.dek ?? place.note;
 
   return (
     <a
@@ -109,11 +116,11 @@ function TimelineInlinePreview({ place }: { place: Place }) {
       href={`/stories/${place.story.slug}`}
       style={{ "--place-accent": accent.primary, "--place-accent-pale": accent.pale } as Record<string, string>}
     >
-      {place.photo ? <img src={place.photo} alt={`${place.name} story preview`} /> : <PlaceGlyph place={place} className="timeline-preview-glyph" />}
+      {previewImage ? <img src={previewImage} alt={`${place.name} story preview`} /> : <PlaceGlyph place={place} className="timeline-preview-glyph" />}
       <span>
         <small>{place.dateLabel} · {place.country}</small>
         <strong>{place.story.title ?? place.name}</strong>
-        {place.story.summary || place.note ? <em>{place.story.summary || place.note}</em> : null}
+        {previewText ? <em>{previewText}</em> : null}
         <b>Read story →</b>
       </span>
     </a>
@@ -256,6 +263,45 @@ function FullTimelinePage({
   );
 }
 
+function StoriesArchivePage({
+  stories,
+  selectedPlace,
+  onSelect,
+}: {
+  stories: Place[];
+  selectedPlace: Place;
+  onSelect: (place: Place) => void;
+}) {
+  return (
+    <main className="story-page story-archive-page">
+      <header className="story-header">
+        <a className="story-wordmark" href="/">
+          Pretty Little Maps
+        </a>
+        <a className="story-back" href="/">
+          ← Back to atlas
+        </a>
+      </header>
+      <article className="story-article">
+        <p className="story-kicker">Stories</p>
+        <h1>Story Archive</h1>
+        <p className="story-summary">Published notes and photographs from the atlas.</p>
+      </article>
+      <section className="story-archive-grid" aria-label="Published stories">
+        {stories.map((place) => (
+          <PlaceCard
+            key={place.id}
+            place={place}
+            month={place.dateLabel}
+            selected={selectedPlace.id === place.id}
+            onSelect={onSelect}
+          />
+        ))}
+      </section>
+    </main>
+  );
+}
+
 export default function App() {
   const timelinePlaces = useMemo(() => getTimelinePlaces(), []);
   const latestYear = useMemo(() => {
@@ -275,8 +321,8 @@ export default function App() {
   const storySlug = useMemo(() => getStorySlugFromPath(), [routePath]);
 
   const storyPlaces = useMemo(() => {
-    const storyEntries = getMeaningfulStories(timelinePlaces).reverse();
-    if (hasMeaningfulStoryContent(selectedPlace) && !storyEntries.some((place) => place.id === selectedPlace.id)) {
+    const storyEntries = getFeaturedStories(timelinePlaces);
+    if (selectedPlace.story?.featured && hasMeaningfulStoryContent(selectedPlace) && !storyEntries.some((place) => place.id === selectedPlace.id)) {
       return [selectedPlace, ...storyEntries];
     }
     return storyEntries;
@@ -292,10 +338,17 @@ export default function App() {
   const relatedStoryPlaces = useMemo(() => {
     if (!currentStoryPlace?.story) return [];
     const relatedIds = currentStoryPlace.story.relatedEntryIds ?? currentStoryPlace.story.relatedPlaceIds ?? [];
-    return relatedIds
+    const explicitRelated = relatedIds
       .map((id) => timelinePlaces.find((place) => place.id === id))
-      .filter((place): place is Place => Boolean(place?.hasStory));
-  }, [currentStoryPlace, timelinePlaces]);
+      .filter((place): place is Place => Boolean(place && place.id !== currentStoryPlace.id && hasMeaningfulStoryContent(place)));
+    if (explicitRelated.length >= 2) return explicitRelated;
+
+    const inferredRelated = meaningfulStories.filter((place) => {
+      if (place.id === currentStoryPlace.id) return false;
+      return place.country === currentStoryPlace.country || getStartYear(place) === getStartYear(currentStoryPlace);
+    });
+    return inferredRelated.slice(0, 3);
+  }, [currentStoryPlace, meaningfulStories, timelinePlaces]);
 
   useEffect(() => {
     const year = getStartYear(selectedPlace);
@@ -348,6 +401,16 @@ export default function App() {
     );
   }
 
+  if (isStoriesArchivePath(routePath)) {
+    return (
+      <StoriesArchivePage
+        stories={[...meaningfulStories].reverse()}
+        selectedPlace={selectedPlace}
+        onSelect={handleSelectPlace}
+      />
+    );
+  }
+
   if (storySlug) {
     if (currentStoryPlace) {
       return (
@@ -366,7 +429,7 @@ export default function App() {
           <a className="story-wordmark" href="/">
             Pretty Little Maps
           </a>
-          <a className="story-back" href="/#stories">
+          <a className="story-back" href="/">
             ← Back to atlas
           </a>
         </header>
@@ -414,7 +477,7 @@ export default function App() {
           <aside className="story-panel" id="stories">
             <div className="module-header">
               <p>Featured Stories</p>
-              <button type="button">View all →</button>
+              <a href="/stories">View all →</a>
             </div>
             <div className="story-list">
               {storyPlaces.map((place) => (

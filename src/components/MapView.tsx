@@ -240,14 +240,15 @@ const registerMapIcons = async (map: maplibregl.Map) => {
 
 const registerStoryPreviewImages = async (map: maplibregl.Map, storyPlaces: Place[]) => {
   await Promise.all(storyPlaces.map(async (place) => {
-    if (!place.photo) return;
+    const storyImage = place.story?.previewImage ?? place.story?.coverImage;
+    if (!storyImage?.startsWith("/images/stories/")) return;
     const name = storyPreviewImageName(place.id);
     if (map.hasImage(name)) return;
     try {
-      const image = await loadImage(place.photo, 72);
+      const image = await loadImage(storyImage, 72);
       map.addImage(name, image, { pixelRatio: 2 });
     } catch {
-      if (import.meta.env.DEV) console.warn(`Could not load map story preview image for ${place.id}: ${place.photo}`);
+      if (import.meta.env.DEV) console.warn(`Could not load map story preview image for ${place.id}: ${storyImage}`);
     }
   }));
 };
@@ -448,7 +449,8 @@ const getStoryPreviewFeatureCollection = (places: Place[], selectedPlace: Place)
     type: "FeatureCollection",
     features: places.flatMap((place) => {
       const point = getPrimaryPoint(place);
-      if (!point || !hasMeaningfulStoryContent(place) || !place.photo) return [];
+      const storyImage = place.story?.previewImage ?? place.story?.coverImage;
+      if (!point || !hasMeaningfulStoryContent(place) || !storyImage?.startsWith("/images/stories/")) return [];
       const accent = getPlaceAccent(place);
       return [{
         type: "Feature",
@@ -457,10 +459,10 @@ const getStoryPreviewFeatureCollection = (places: Place[], selectedPlace: Place)
           title: place.name,
           country: place.country,
           dateLabel: place.dateLabel,
-          note: place.story?.summary || place.note,
-          photo: place.photo ?? "",
+          note: place.story?.previewSummary || place.story?.dek || place.note,
+          photo: storyImage,
           storyUrl: place.story ? `/stories/${place.story.slug}` : "",
-          previewImage: place.photo ? storyPreviewImageName(place.id) : "",
+          previewImage: storyPreviewImageName(place.id),
           featured: place.featured,
           selected: place.id === selectedPlace.id,
           accentColor: accent.primary,
@@ -481,14 +483,16 @@ const escapeHtml = (value: string) => value
 const getSelectedPreviewHtml = (place: Place) => {
   if (!hasMeaningfulStoryContent(place) || !place.story) return "";
   const accent = getPlaceAccent(place);
-  const image = place.photo ? `<img src="${escapeHtml(place.photo)}" alt="${escapeHtml(place.name)} story preview" />` : "";
+  const storyImage = place.story.previewImage ?? place.story.coverImage;
+  const image = storyImage ? `<img src="${escapeHtml(storyImage)}" alt="${escapeHtml(place.name)} story preview" />` : "";
+  const previewText = place.story.previewSummary || place.story.dek || place.note;
   return `
     <article class="map-selected-preview" style="--place-accent:${accent.primary};--place-accent-pale:${accent.pale}">
       ${image}
       <div>
         <small>${escapeHtml(place.dateLabel)} · ${escapeHtml(place.country)}</small>
         <strong>${escapeHtml(place.story.title ?? place.name)}</strong>
-        ${place.story.summary || place.note ? `<p>${escapeHtml(place.story.summary || place.note)}</p>` : ""}
+        ${previewText ? `<p>${escapeHtml(previewText)}</p>` : ""}
         <a href="/stories/${escapeHtml(place.story.slug)}">Read story →</a>
       </div>
     </article>

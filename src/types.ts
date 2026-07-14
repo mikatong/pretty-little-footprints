@@ -32,37 +32,51 @@ export type MapIconType =
   | "default";
 
 export type ImageSource = {
-  type: "user" | "temporary-stock";
+  type: "user" | "temporary-stock" | "placeholder";
   credit?: string;
   sourceUrl?: string;
 };
+
+export type StoryStatus = "draft" | "published";
+export type StoryImageOrientation = "portrait" | "landscape" | "square";
 
 export type StoryBlock =
   | {
       id: string;
       type: "text";
-      content: string;
+      body: string;
     }
   | {
       id: string;
       type: "image";
       src: string;
-      alt?: string;
+      alt: string;
       caption?: string;
+      orientation?: StoryImageOrientation;
     }
   | {
       id: string;
       type: "gallery";
       images: {
         src: string;
-        alt?: string;
+        alt: string;
         caption?: string;
+        orientation?: StoryImageOrientation;
       }[];
+      layout?: "grid" | "scroll" | "masonry";
     }
   | {
       id: string;
       type: "quote";
-      content: string;
+      body: string;
+      attribution?: string;
+    }
+  | {
+      id: string;
+      type: "map";
+      placeIds?: string[];
+      routeId?: string;
+      caption?: string;
     }
   | {
       id: string;
@@ -71,8 +85,18 @@ export type StoryBlock =
 
 export type Story = {
   slug: string;
-  title?: string;
-  summary?: string;
+  placeId: string;
+  title: string;
+  dek?: string;
+  dateLabel?: string;
+  locationLabel?: string;
+  status: StoryStatus;
+  featured?: boolean;
+  coverImage?: string;
+  coverAlt?: string;
+  previewImage?: string;
+  previewSummary?: string;
+  imageSource?: ImageSource;
   blocks: StoryBlock[];
   relatedEntryIds?: string[];
   relatedPlaceIds?: string[];

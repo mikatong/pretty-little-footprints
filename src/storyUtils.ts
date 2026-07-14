@@ -1,4 +1,4 @@
-import type { Place } from "./types";
+import type { Place, Story, StoryBlock } from "./types";
 
 export const selectedPlaceStorageKey = "pretty-little-maps:selected-place";
 
@@ -10,12 +10,40 @@ export function hasRealPreviewImage(place: Place) {
   return Boolean(place.photo?.startsWith("/images/stories/"));
 }
 
+function hasRealImagePath(src?: string) {
+  return Boolean(src && src.startsWith("/images/stories/") && !src.includes(".gitkeep"));
+}
+
+function isMeaningfulBlock(block: StoryBlock) {
+  if (block.type === "text") return block.body.trim().length > 0;
+  if (block.type === "image") return hasRealImagePath(block.src);
+  if (block.type === "gallery") return block.images.some((image) => hasRealImagePath(image.src));
+  if (block.type === "quote") return block.body.trim().length > 0;
+  if (block.type === "map") return Boolean(block.placeIds?.length || block.routeId);
+  return false;
+}
+
+export function isMeaningfulStory(story?: Story) {
+  if (!story || story.status !== "published") return false;
+  return Boolean(
+    hasRealImagePath(story.coverImage) ||
+    hasRealImagePath(story.previewImage) ||
+    story.blocks.some(isMeaningfulBlock)
+  );
+}
+
 export function hasMeaningfulStoryContent(place: Place) {
-  return Boolean(place.hasStory && ((place.story?.blocks.length ?? 0) > 0 || hasRealPreviewImage(place)));
+  return Boolean(place.hasStory && isMeaningfulStory(place.story));
 }
 
 export function getMeaningfulStories(places: Place[]) {
   return places.filter(hasMeaningfulStoryContent).sort((a, b) => getStartTime(a) - getStartTime(b));
+}
+
+export function getFeaturedStories(places: Place[]) {
+  return places
+    .filter((place) => place.story?.featured && hasMeaningfulStoryContent(place))
+    .sort((a, b) => getStartTime(b) - getStartTime(a));
 }
 
 export function getLatestMeaningfulFeaturedStory(places: Place[]) {

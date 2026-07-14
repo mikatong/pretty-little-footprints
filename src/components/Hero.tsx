@@ -15,7 +15,7 @@ export function Hero({ placeCount, countryCount, sinceYear, selectedPlace }: Her
         <div>
           <a href="#journey">Timeline</a>
           <a href="#map">Map</a>
-          <a href="#stories">Stories</a>
+          <a href="/stories">Stories</a>
           <a href="#about">About</a>
         </div>
       </nav>
