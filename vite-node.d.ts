@@ -12,8 +12,10 @@ declare const Buffer: {
 declare module "node:fs/promises" {
   export function access(path: string): Promise<void>;
   export function mkdir(path: string, options?: { recursive?: boolean }): Promise<void>;
+  export function readFile(path: string, encoding: string): Promise<string>;
   export function readdir(path: string): Promise<string[]>;
-  export function writeFile(path: string, data: Buffer, options?: { flag?: string }): Promise<void>;
+  export function rename(oldPath: string, newPath: string): Promise<void>;
+  export function writeFile(path: string, data: Buffer | string, options?: { flag?: string }): Promise<void>;
 }
 
 declare module "node:http" {
@@ -34,5 +36,8 @@ declare module "node:http" {
 }
 
 declare module "node:path" {
+  export function basename(path: string): string;
+  export function relative(from: string, to: string): string;
   export function resolve(...paths: string[]): string;
+  export const sep: string;
 }

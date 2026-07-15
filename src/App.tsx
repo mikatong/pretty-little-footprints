@@ -15,7 +15,7 @@ import {
   hasMeaningfulStoryContent,
   selectedPlaceStorageKey,
 } from "./storyUtils";
-import type { MapPoint, Place } from "./types";
+import type { MapPoint, Place, Story } from "./types";
 
 const sinceYear = "2015";
 
@@ -70,6 +70,11 @@ function isStoriesArchivePath(pathname = window.location.pathname) {
 
 function isUploadPath(pathname = window.location.pathname) {
   return pathname.replace(/\/$/, "") === "/upload";
+}
+
+function getComposeSlugFromPath(pathname = window.location.pathname) {
+  const match = pathname.match(/^\/compose\/([^/]+)\/?$/);
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
 function hasKnownMonth(place: Place) {
@@ -312,36 +317,32 @@ function isHeicFile(file: File) {
   return file.type === "image/heic" || file.type === "image/heif" || name.endsWith(".heic") || name.endsWith(".heif");
 }
 
-function loadImage(file: File) {
-  return new Promise<HTMLImageElement>((resolveImage, reject) => {
-    const image = new Image();
-    const url = URL.createObjectURL(file);
-    image.onload = () => {
-      URL.revokeObjectURL(url);
-      resolveImage(image);
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error(`Could not read ${file.name}.`));
-    };
-    image.src = url;
-  });
+function getFirstTextBlock(story: Story) {
+  return story.blocks.find((block) => block.type === "text");
 }
 
-async function toJpegFile(file: File, filename: string) {
-  if (file.type === "image/jpeg") return new File([file], filename, { type: "image/jpeg" });
+function getComposerStory(
+  story: Story,
+  values: { title: string; previewSummary: string; body: string; status: Story["status"]; featured: boolean; coverImage: string },
+): Story {
+  let updatedFirstText = false;
+  const trimmedBody = values.body.trim();
+  const blocks = story.blocks.map((block) => {
+    if (block.type !== "text" || updatedFirstText) return block;
+    updatedFirstText = true;
+    return { ...block, body: trimmedBody };
+  });
 
-  const image = await loadImage(file);
-  const canvas = document.createElement("canvas");
-  canvas.width = image.naturalWidth;
-  canvas.height = image.naturalHeight;
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error(`Could not prepare ${file.name}.`);
-  context.drawImage(image, 0, 0);
-
-  const blob = await new Promise<Blob | null>((resolveBlob) => canvas.toBlob(resolveBlob, "image/jpeg", 0.9));
-  if (!blob) throw new Error(`Could not convert ${file.name} to JPEG.`);
-  return new File([blob], filename, { type: "image/jpeg" });
+  return {
+    ...story,
+    title: values.title,
+    previewSummary: values.previewSummary,
+    status: values.status,
+    featured: values.featured,
+    coverImage: values.coverImage || story.coverImage,
+    previewImage: values.coverImage || story.previewImage,
+    blocks: updatedFirstText || !trimmedBody ? blocks : [{ id: `${story.slug}-text`, type: "text", body: trimmedBody }, ...blocks],
+  };
 }
 
 function UploadPage() {
@@ -374,9 +375,8 @@ function UploadPage() {
     try {
       const formData = new FormData();
       formData.append("slug", selectedSlug);
-      if (coverFile) formData.append("cover", await toJpegFile(coverFile, "cover.jpg"));
-      const convertedPhotos = await Promise.all(photoFiles.map((file, index) => toJpegFile(file, `${String(index + 1).padStart(2, "0")}.jpg`)));
-      convertedPhotos.forEach((file) => formData.append("photos", file));
+      if (coverFile) formData.append("cover", coverFile);
+      photoFiles.forEach((file) => formData.append("photos", file));
 
       const response = await fetch("/api/local-upload", { method: "POST", body: formData });
       const result = await response.json() as { saved?: string[]; error?: string };
@@ -458,6 +458,219 @@ function UploadPage() {
   );
 }
 
+function StoryComposerPage({
+  place,
+  relatedPlaces,
+  meaningfulStories,
+  onSelectPlace,
+}: {
+  place: Place | null;
+  relatedPlaces: Place[];
+  meaningfulStories: Place[];
+  onSelectPlace: (place: Place) => void;
+}) {
+  if (!import.meta.env.DEV) {
+    return (
+      <main className="upload-page">
+        <section className="upload-card">
+          <p className="upload-kicker">Pretty Little Maps</p>
+          <h1>Story editing is available locally.</h1>
+          <a className="upload-back" href="/">Back to atlas</a>
+        </section>
+      </main>
+    );
+  }
+
+  if (!place?.story) {
+    return (
+      <main className="compose-page">
+        <section className="compose-card">
+          <p className="upload-kicker">Pretty Little Maps</p>
+          <h1>Story not found</h1>
+          <a className="upload-back" href="/">Back to atlas</a>
+        </section>
+      </main>
+    );
+  }
+
+  const story = place.story;
+  const [title, setTitle] = useState(story.title);
+  const [previewSummary, setPreviewSummary] = useState(story.previewSummary ?? story.dek ?? "");
+  const [body, setBody] = useState(getFirstTextBlock(story)?.body ?? "");
+  const [status, setStatus] = useState<Story["status"]>(story.status);
+  const [featured, setFeatured] = useState(Boolean(story.featured));
+  const [coverImage, setCoverImage] = useState(story.coverImage ?? "");
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [showPreview, setShowPreview] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [storyUrl, setStoryUrl] = useState("");
+  const selectedFiles = [...(coverFile ? [coverFile] : []), ...photoFiles];
+  const previewStory = getComposerStory(story, { title, previewSummary, body, status, featured, coverImage });
+  const previewPlace: Place = {
+    ...place,
+    story: previewStory,
+    featured,
+    photo: previewStory.previewImage ?? previewStory.coverImage ?? place.photo,
+  };
+
+  const uploadFiles = async () => {
+    if (selectedFiles.length === 0) return { cover: "", gallery: [] as string[] };
+    if (selectedFiles.some(isHeicFile)) throw new Error("HEIC upload is not supported yet. Please choose JPEG, PNG, or WebP.");
+
+    const formData = new FormData();
+    formData.append("slug", story.slug);
+    if (coverFile) formData.append("cover", coverFile);
+    photoFiles.forEach((file) => formData.append("photos", file));
+
+    const response = await fetch("/api/local-upload", { method: "POST", body: formData });
+    const result = await response.json() as { saved?: string[]; error?: string };
+    if (!response.ok) throw new Error(result.error ?? "Upload failed.");
+
+    const savedPaths = (result.saved ?? []).map((path) => `/images/stories/${path}`);
+    return {
+      cover: savedPaths.find((path) => path.includes(`/${story.slug}/cover.`)) ?? "",
+      gallery: savedPaths.filter((path) => !path.includes(`/${story.slug}/cover.`)),
+    };
+  };
+
+  const onSave = async (event: { preventDefault: () => void }) => {
+    event.preventDefault();
+    setSaving(true);
+    setMessage("");
+    setStoryUrl("");
+
+    try {
+      const uploaded = await uploadFiles();
+      const response = await fetch("/api/local-story", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slug: story.slug,
+          title,
+          previewSummary,
+          body,
+          status,
+          featured,
+          coverImage: uploaded.cover || coverImage,
+          previewImage: uploaded.cover || coverImage,
+          galleryImages: uploaded.gallery,
+        }),
+      });
+      const result = await response.json() as { url?: string; error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Save failed.");
+
+      const localUrl = result.url ?? `/stories/${story.slug}`;
+      setCoverImage(uploaded.cover || coverImage);
+      setCoverFile(null);
+      setPhotoFiles([]);
+      setStoryUrl(localUrl);
+      setMessage("Draft saved locally.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Save failed.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <main className="compose-page">
+      <form className="compose-card" onSubmit={onSave}>
+        <p className="upload-kicker">Local Author Mode</p>
+        <h1>{story.title}</h1>
+
+        <label>
+          <span>Story Title</span>
+          <input value={title} onChange={(event: { target: HTMLInputElement }) => setTitle(event.target.value)} />
+        </label>
+
+        <label>
+          <span>Preview Summary</span>
+          <textarea value={previewSummary} rows={3} onChange={(event: { target: HTMLTextAreaElement }) => setPreviewSummary(event.target.value)} />
+        </label>
+
+        <label>
+          <span>Cover Image Path</span>
+          <input value={coverImage} onChange={(event: { target: HTMLInputElement }) => setCoverImage(event.target.value)} placeholder="/images/stories/story/cover.jpg" />
+        </label>
+
+        <label>
+          <span>Cover Upload</span>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif"
+            onChange={(event: { target: HTMLInputElement }) => setCoverFile(event.target.files?.[0] ?? null)}
+          />
+        </label>
+
+        <label>
+          <span>Photo Upload</span>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif"
+            multiple
+            onChange={(event: { target: HTMLInputElement }) => setPhotoFiles(Array.from(event.target.files ?? []))}
+          />
+        </label>
+
+        <section className="upload-files" aria-label="Selected files">
+          <strong>Selected Files</strong>
+          {selectedFiles.length > 0 ? (
+            <ul>
+              {coverFile ? <li>Cover: {coverFile.name}</li> : null}
+              {photoFiles.map((file) => <li key={`${file.name}-${file.lastModified}`}>{file.name}</li>)}
+            </ul>
+          ) : (
+            <p>No files selected.</p>
+          )}
+        </section>
+
+        <label>
+          <span>Main Story Text</span>
+          <textarea value={body} rows={10} onChange={(event: { target: HTMLTextAreaElement }) => setBody(event.target.value)} />
+        </label>
+
+        <label>
+          <span>Status</span>
+          <select value={status} onChange={(event: { target: HTMLSelectElement }) => setStatus(event.target.value as Story["status"])}>
+            <option value="draft">draft</option>
+            <option value="published">published</option>
+          </select>
+        </label>
+
+        <label className="compose-toggle">
+          <input type="checkbox" checked={featured} onChange={(event: { target: HTMLInputElement }) => setFeatured(event.target.checked)} />
+          <span>Featured</span>
+        </label>
+
+        <div className="compose-actions">
+          <button className="upload-button secondary" type="button" onClick={() => setShowPreview((shown: boolean) => !shown)}>
+            Preview
+          </button>
+          <button className="upload-button" type="submit" disabled={saving}>
+            {saving ? "Saving..." : "Save Draft"}
+          </button>
+        </div>
+
+        {message ? <p className="upload-message">{message}</p> : null}
+        {storyUrl ? <a className="upload-back" href={storyUrl}>Open local Story: {storyUrl}</a> : null}
+      </form>
+
+      {showPreview ? (
+        <section className="compose-preview" aria-label="Story preview">
+          <StoryPage
+            place={previewPlace}
+            relatedPlaces={relatedPlaces}
+            meaningfulStories={meaningfulStories}
+            onSelectPlace={onSelectPlace}
+          />
+        </section>
+      ) : null}
+    </main>
+  );
+}
+
 export default function App() {
   const timelinePlaces = useMemo(() => getTimelinePlaces(), []);
   const latestYear = useMemo(() => {
@@ -475,6 +688,7 @@ export default function App() {
   const [expandedYears, setExpandedYears] = useState<Set<string>>(() => new Set([latestYear]));
   const [routePath, setRoutePath] = useState(() => window.location.pathname);
   const storySlug = useMemo(() => getStorySlugFromPath(), [routePath]);
+  const composeSlug = useMemo(() => getComposeSlugFromPath(routePath), [routePath]);
 
   const storyPlaces = useMemo(() => {
     const storyEntries = getFeaturedStories(timelinePlaces);
@@ -490,6 +704,11 @@ export default function App() {
     if (!storySlug) return null;
     return timelinePlaces.find((place) => place.story?.slug === storySlug) ?? null;
   }, [storySlug, timelinePlaces]);
+
+  const composerStoryPlace = useMemo(() => {
+    if (!composeSlug) return null;
+    return timelinePlaces.find((place) => place.story?.slug === composeSlug) ?? null;
+  }, [composeSlug, timelinePlaces]);
 
   const relatedStoryPlaces = useMemo(() => {
     if (!currentStoryPlace?.story) return [];
@@ -548,6 +767,17 @@ export default function App() {
     return <UploadPage />;
   }
 
+  if (composeSlug) {
+    return (
+      <StoryComposerPage
+        place={composerStoryPlace}
+        relatedPlaces={relatedStoryPlaces}
+        meaningfulStories={meaningfulStories}
+        onSelectPlace={handleSelectPlace}
+      />
+    );
+  }
+
   if (isTimelinePath(routePath)) {
     return (
       <FullTimelinePage
@@ -603,6 +833,11 @@ export default function App() {
 
   return (
     <main className="app-shell">
+      {import.meta.env.DEV && selectedPlace.story ? (
+        <a className="author-edit-button" href={`/compose/${selectedPlace.story.slug}`}>
+          Edit
+        </a>
+      ) : null}
       <Hero
         placeCount={getPlaceCount(timelinePlaces)}
         countryCount={getCountryCount(timelinePlaces)}
