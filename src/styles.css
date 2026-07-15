@@ -980,6 +980,112 @@ img {
   color: var(--muted);
 }
 
+.upload-page {
+  min-height: 100vh;
+  padding: 18px;
+  background: #ece8df;
+}
+
+.upload-card {
+  display: grid;
+  gap: 22px;
+  width: min(520px, 100%);
+  margin: 0 auto;
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: var(--bg);
+  box-shadow: 0 18px 60px rgba(44, 36, 31, 0.08);
+}
+
+.upload-kicker {
+  margin: 0;
+  color: var(--accent);
+  font-family: "IBM Plex Sans", Inter, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.upload-card h1 {
+  margin: 0;
+  color: var(--text);
+  font-family: "Instrument Serif", Georgia, serif;
+  font-size: clamp(38px, 10vw, 58px);
+  font-weight: 400;
+  line-height: 0.98;
+}
+
+.upload-card label {
+  display: grid;
+  gap: 9px;
+}
+
+.upload-card label span,
+.upload-files strong {
+  color: var(--muted);
+  font-family: "IBM Plex Sans", Inter, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.upload-card select,
+.upload-card input[type="file"] {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  background: var(--surface);
+}
+
+.upload-files {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255, 253, 252, 0.7);
+}
+
+.upload-files ul,
+.upload-files p,
+.upload-message {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.upload-files ul {
+  display: grid;
+  gap: 7px;
+  padding-left: 18px;
+}
+
+.upload-button {
+  min-height: 56px;
+  border-radius: 14px;
+  color: var(--surface);
+  background: var(--accent);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.upload-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.upload-back {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
 @media (max-width: 1180px) {
   .atlas-layout {
     grid-template-columns: minmax(280px, 31%) minmax(0, 69%);

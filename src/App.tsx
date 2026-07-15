@@ -5,6 +5,7 @@ import { PlaceCard } from "./components/PlaceCard";
 import { PlaceGlyph } from "./components/PlaceGlyph";
 import { StoryPage } from "./components/StoryPage";
 import { places } from "./data/places";
+import { stories } from "./data/stories";
 import { getPlaceAccent } from "./placePresentation";
 import {
   getFeaturedStories,
@@ -65,6 +66,10 @@ function isTimelinePath(pathname = window.location.pathname) {
 
 function isStoriesArchivePath(pathname = window.location.pathname) {
   return pathname.replace(/\/$/, "") === "/stories";
+}
+
+function isUploadPath(pathname = window.location.pathname) {
+  return pathname.replace(/\/$/, "") === "/upload";
 }
 
 function hasKnownMonth(place: Place) {
@@ -302,6 +307,157 @@ function StoriesArchivePage({
   );
 }
 
+function isHeicFile(file: File) {
+  const name = file.name.toLowerCase();
+  return file.type === "image/heic" || file.type === "image/heif" || name.endsWith(".heic") || name.endsWith(".heif");
+}
+
+function loadImage(file: File) {
+  return new Promise<HTMLImageElement>((resolveImage, reject) => {
+    const image = new Image();
+    const url = URL.createObjectURL(file);
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolveImage(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error(`Could not read ${file.name}.`));
+    };
+    image.src = url;
+  });
+}
+
+async function toJpegFile(file: File, filename: string) {
+  if (file.type === "image/jpeg") return new File([file], filename, { type: "image/jpeg" });
+
+  const image = await loadImage(file);
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error(`Could not prepare ${file.name}.`);
+  context.drawImage(image, 0, 0);
+
+  const blob = await new Promise<Blob | null>((resolveBlob) => canvas.toBlob(resolveBlob, "image/jpeg", 0.9));
+  if (!blob) throw new Error(`Could not convert ${file.name} to JPEG.`);
+  return new File([blob], filename, { type: "image/jpeg" });
+}
+
+function UploadPage() {
+  const [selectedSlug, setSelectedSlug] = useState(stories[0]?.slug ?? "");
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [message, setMessage] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const selectedFiles = [...(coverFile ? [coverFile] : []), ...photoFiles];
+
+  const onSubmit = async (event: { preventDefault: () => void }) => {
+    event.preventDefault();
+    setMessage("");
+
+    if (!import.meta.env.DEV) return;
+    if (!selectedSlug) {
+      setMessage("Choose a Story.");
+      return;
+    }
+    if (selectedFiles.length === 0) {
+      setMessage("Choose at least one image.");
+      return;
+    }
+    if (selectedFiles.some(isHeicFile)) {
+      setMessage("HEIC upload is not supported yet. Please choose JPEG, PNG, or WebP.");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("slug", selectedSlug);
+      if (coverFile) formData.append("cover", await toJpegFile(coverFile, "cover.jpg"));
+      const convertedPhotos = await Promise.all(photoFiles.map((file, index) => toJpegFile(file, `${String(index + 1).padStart(2, "0")}.jpg`)));
+      convertedPhotos.forEach((file) => formData.append("photos", file));
+
+      const response = await fetch("/api/local-upload", { method: "POST", body: formData });
+      const result = await response.json() as { saved?: string[]; error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Upload failed.");
+      setMessage(`Uploaded: ${result.saved?.join(", ") ?? "files saved"}`);
+      setCoverFile(null);
+      setPhotoFiles([]);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Upload failed.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  if (!import.meta.env.DEV) {
+    return (
+      <main className="upload-page">
+        <section className="upload-card">
+          <p className="upload-kicker">Pretty Little Maps</p>
+          <h1>Photo upload is available locally.</h1>
+          <a className="upload-back" href="/">Back to atlas</a>
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="upload-page">
+      <form className="upload-card" onSubmit={onSubmit}>
+        <p className="upload-kicker">Pretty Little Maps</p>
+        <h1>Upload photos</h1>
+
+        <label>
+          <span>Story</span>
+          <select value={selectedSlug} onChange={(event: { target: HTMLSelectElement }) => setSelectedSlug(event.target.value)}>
+            {stories.map((story) => (
+              <option key={story.slug} value={story.slug}>{story.title}</option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          <span>Upload Cover</span>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif"
+            onChange={(event: { target: HTMLInputElement }) => setCoverFile(event.target.files?.[0] ?? null)}
+          />
+        </label>
+
+        <label>
+          <span>Upload Photos</span>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif"
+            multiple
+            onChange={(event: { target: HTMLInputElement }) => setPhotoFiles(Array.from(event.target.files ?? []))}
+          />
+        </label>
+
+        <section className="upload-files" aria-label="Selected files">
+          <strong>Selected Files</strong>
+          {selectedFiles.length > 0 ? (
+            <ul>
+              {coverFile ? <li>Cover: {coverFile.name}</li> : null}
+              {photoFiles.map((file) => <li key={`${file.name}-${file.lastModified}`}>{file.name}</li>)}
+            </ul>
+          ) : (
+            <p>No files selected.</p>
+          )}
+        </section>
+
+        <button className="upload-button" type="submit" disabled={uploading}>
+          {uploading ? "Uploading..." : "Upload"}
+        </button>
+        {message ? <p className="upload-message">{message}</p> : null}
+      </form>
+    </main>
+  );
+}
+
 export default function App() {
   const timelinePlaces = useMemo(() => getTimelinePlaces(), []);
   const latestYear = useMemo(() => {
@@ -387,6 +543,10 @@ export default function App() {
       return next;
     });
   }, []);
+
+  if (isUploadPath(routePath)) {
+    return <UploadPage />;
+  }
 
   if (isTimelinePath(routePath)) {
     return (
