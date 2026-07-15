@@ -558,15 +558,16 @@ function StoryComposerPage({
           galleryImages: uploaded.gallery,
         }),
       });
-      const result = await response.json() as { url?: string; error?: string };
+      const result = await response.json() as { story?: Story; url?: string; error?: string };
       if (!response.ok) throw new Error(result.error ?? "Save failed.");
 
       const localUrl = result.url ?? `/stories/${story.slug}`;
+      const savedStatus = result.story?.status ?? status;
       setCoverImage(uploaded.cover || coverImage);
       setCoverFile(null);
       setPhotoFiles([]);
       setStoryUrl(localUrl);
-      setMessage("Draft saved locally.");
+      setMessage(`Saved · ${savedStatus === "published" ? "Published" : "Draft"}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Save failed.");
     } finally {
@@ -634,8 +635,8 @@ function StoryComposerPage({
         <label>
           <span>Status</span>
           <select value={status} onChange={(event: { target: HTMLSelectElement }) => setStatus(event.target.value as Story["status"])}>
-            <option value="draft">draft</option>
-            <option value="published">published</option>
+            <option value="draft">Draft</option>
+            <option value="published">Published</option>
           </select>
         </label>
 
@@ -649,7 +650,7 @@ function StoryComposerPage({
             Preview
           </button>
           <button className="upload-button" type="submit" disabled={saving}>
-            {saving ? "Saving..." : "Save Draft"}
+            {saving ? "Saving..." : "Save Changes"}
           </button>
         </div>
 

@@ -160,7 +160,7 @@ function updateStory(story: Story, payload: ComposerPayload) {
     ...story,
     title,
     status,
-    featured: Boolean(payload.featured) || undefined,
+    featured: Boolean(payload.featured),
     previewSummary: (payload.previewSummary ?? "").trim() || undefined,
     coverImage: coverImage || story.coverImage,
     previewImage: coverImage || story.previewImage,
