@@ -89,6 +89,20 @@ img {
   pointer-events: none;
 }
 
+.hero-destination--with-image {
+  top: 35%;
+  max-width: min(280px, 28vw);
+}
+
+.hero-destination img {
+  width: min(240px, 24vw);
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border: 1px solid rgba(255, 253, 252, 0.58);
+  border-radius: 18px;
+  box-shadow: 0 18px 54px rgba(44, 36, 31, 0.16);
+}
+
 .hero-destination strong {
   font-family: "Instrument Serif", Georgia, serif;
   font-size: clamp(42px, 5vw, 74px);

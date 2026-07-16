@@ -11,6 +11,7 @@ import {
   getFirstStoryText,
   getStoryGalleryUrls,
   isHeicNameOrType,
+  loadOwnerCloudStories,
   loadOwnerCloudStory,
   loadPublishedCloudStories,
   mergeCloudStories,
@@ -1057,14 +1058,15 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(isSupabaseConfigured);
   const [cloudStories, setCloudStories] = useState<Story[]>([]);
   const [hiddenCloudDraftPlaceIds, setHiddenCloudDraftPlaceIds] = useState<Set<string>>(() => new Set());
+  const [hiddenCloudDraftSlugs, setHiddenCloudDraftSlugs] = useState<Set<string>>(() => new Set());
   const [cloudStoriesAvailable, setCloudStoriesAvailable] = useState(false);
   const storySlug = useMemo(() => getStorySlugFromPath(), [routePath]);
   const composeSlug = useMemo(() => getComposeSlugFromPath(routePath), [routePath]);
   const loginPath = useMemo(() => isLoginPath(routePath), [routePath]);
   const useCloudComposer = isSupabaseConfigured;
   const visiblePlaces = useMemo(() => {
-    return cloudStoriesAvailable ? mergeCloudStories(timelinePlaces, cloudStories, hiddenCloudDraftPlaceIds) : timelinePlaces;
-  }, [cloudStories, cloudStoriesAvailable, hiddenCloudDraftPlaceIds, timelinePlaces]);
+    return cloudStoriesAvailable ? mergeCloudStories(timelinePlaces, cloudStories, hiddenCloudDraftPlaceIds, hiddenCloudDraftSlugs) : timelinePlaces;
+  }, [cloudStories, cloudStoriesAvailable, hiddenCloudDraftPlaceIds, hiddenCloudDraftSlugs, timelinePlaces]);
   const selectedVisiblePlace = visiblePlaces.find((place) => place.id === selectedPlace.id) ?? selectedPlace;
 
   const storyPlaces = useMemo(() => {
@@ -1148,16 +1150,18 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    loadPublishedCloudStories().then((result) => {
+    const loadStories = session ? loadOwnerCloudStories : loadPublishedCloudStories;
+    loadStories().then((result) => {
       if (cancelled) return;
       setCloudStories(result.stories);
       setHiddenCloudDraftPlaceIds(result.hiddenPlaceIds ?? new Set());
+      setHiddenCloudDraftSlugs(result.hiddenSlugs ?? new Set());
       setCloudStoriesAvailable(result.available);
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [session]);
 
   useEffect(() => {
     if (!composeSlug || !useCloudComposer || authLoading || session) return;
@@ -1288,8 +1292,8 @@ export default function App() {
 
   return (
     <main className="app-shell">
-      {(import.meta.env.DEV || session) && (session ? selectedPlace.story : selectedVisiblePlace.story) ? (
-        <a className="author-edit-button" href={`/compose/${(session ? selectedPlace.story : selectedVisiblePlace.story)?.slug}`}>
+      {(import.meta.env.DEV || session) && selectedVisiblePlace.story ? (
+        <a className="author-edit-button" href={`/compose/${selectedVisiblePlace.story.slug}`}>
           Edit
         </a>
       ) : null}

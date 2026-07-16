@@ -3,7 +3,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { MapIconType, MapPoint, Place } from "../types";
 import { getPlaceAccent, getPlaceIconType, type PlaceAccent } from "../placePresentation";
-import { getStartTime, hasMeaningfulStoryContent } from "../storyUtils";
+import { getStartTime, hasMeaningfulStoryContent, isStoryImagePath } from "../storyUtils";
 
 type MapViewProps = {
   places: Place[];
@@ -241,7 +241,7 @@ const registerMapIcons = async (map: maplibregl.Map) => {
 const registerStoryPreviewImages = async (map: maplibregl.Map, storyPlaces: Place[]) => {
   await Promise.all(storyPlaces.map(async (place) => {
     const storyImage = place.story?.previewImage ?? place.story?.coverImage;
-    if (!storyImage?.startsWith("/images/stories/")) return;
+    if (!storyImage || !isStoryImagePath(storyImage)) return;
     const name = storyPreviewImageName(place.id);
     if (map.hasImage(name)) return;
     try {
@@ -450,7 +450,7 @@ const getStoryPreviewFeatureCollection = (places: Place[], selectedPlace: Place)
     features: places.flatMap((place) => {
       const point = getPrimaryPoint(place);
       const storyImage = place.story?.previewImage ?? place.story?.coverImage;
-      if (!point || !hasMeaningfulStoryContent(place) || !storyImage?.startsWith("/images/stories/")) return [];
+      if (!point || !hasMeaningfulStoryContent(place) || !isStoryImagePath(storyImage)) return [];
       const accent = getPlaceAccent(place);
       return [{
         type: "Feature",

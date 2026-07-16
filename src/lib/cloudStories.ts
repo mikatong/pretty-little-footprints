@@ -28,8 +28,19 @@ export type StoryDraftInput = {
   userId: string;
 };
 
+export type CloudStoryLoadResult = {
+  stories: Story[];
+  hiddenPlaceIds: Set<string>;
+  hiddenSlugs: Set<string>;
+  available: boolean;
+};
+
 function getGalleryUrls(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+export function getCanonicalStorySlug(place: Place) {
+  return place.story?.slug ?? place.id;
 }
 
 export function cloudRowToStory(row: CloudStoryRow): Story {
@@ -72,10 +83,22 @@ export function getStoryGalleryUrls(story: Story) {
   return story.blocks.flatMap((block) => block.type === "gallery" ? block.images.map((image) => image.src) : []);
 }
 
-export function mergeCloudStories(places: Place[], cloudStories: Story[], hiddenPlaceIds: Set<string> = new Set()): Place[] {
-  const cloudByPlaceId = new Map(cloudStories.map((story) => [story.placeId, story]));
+export function mergeCloudStories(
+  places: Place[],
+  cloudStories: Story[],
+  hiddenPlaceIds: Set<string> = new Set(),
+  hiddenSlugs: Set<string> = new Set(),
+): Place[] {
+  const cloudByKey = new Map<string, Story>();
+  cloudStories.forEach((story) => {
+    cloudByKey.set(story.placeId, story);
+    cloudByKey.set(story.slug, story);
+  });
+
   return places.map((place) => {
-    if (hiddenPlaceIds.has(place.id)) {
+    const canonicalSlug = getCanonicalStorySlug(place);
+
+    if (hiddenPlaceIds.has(place.id) || hiddenSlugs.has(canonicalSlug)) {
       return {
         ...place,
         story: undefined,
@@ -84,21 +107,27 @@ export function mergeCloudStories(places: Place[], cloudStories: Story[], hidden
       };
     }
 
-    const cloudStory = cloudByPlaceId.get(place.id);
+    const cloudStory = cloudByKey.get(place.id) ?? cloudByKey.get(canonicalSlug);
     if (!cloudStory) return place;
+    const mergedStory: Story = {
+      ...cloudStory,
+      slug: canonicalSlug,
+      placeId: place.id,
+    };
+
     return {
       ...place,
-      story: cloudStory,
+      story: mergedStory,
       hasStory: true,
-      featured: Boolean(cloudStory.featured),
-      photo: cloudStory.previewImage ?? cloudStory.coverImage ?? place.photo,
-      imageSource: cloudStory.imageSource ?? place.imageSource,
+      featured: Boolean(mergedStory.featured),
+      photo: mergedStory.previewImage ?? mergedStory.coverImage ?? place.photo,
+      imageSource: mergedStory.imageSource ?? place.imageSource,
     };
   });
 }
 
-export async function loadPublishedCloudStories() {
-  if (!supabase) return { stories: [] as Story[], available: false };
+export async function loadPublishedCloudStories(): Promise<CloudStoryLoadResult> {
+  if (!supabase) return { stories: [], hiddenPlaceIds: new Set(), hiddenSlugs: new Set(), available: false };
 
   const { data, error } = await supabase
     .from("stories")
@@ -110,12 +139,12 @@ export async function loadPublishedCloudStories() {
 
   if (error) {
     if (import.meta.env.DEV) console.warn("Could not load cloud stories", error.message);
-    return { stories: [] as Story[], available: false };
+    return { stories: [], hiddenPlaceIds: new Set(), hiddenSlugs: new Set(), available: false };
   }
 
   if (indexError) {
     if (import.meta.env.DEV) console.warn("Could not load cloud story visibility index", indexError.message);
-    return { stories: (data as CloudStoryRow[]).map(cloudRowToStory), hiddenPlaceIds: new Set<string>(), available: true };
+    return { stories: (data as CloudStoryRow[]).map(cloudRowToStory), hiddenPlaceIds: new Set(), hiddenSlugs: new Set(), available: true };
   }
 
   const hiddenPlaceIds = new Set(
@@ -123,8 +152,28 @@ export async function loadPublishedCloudStories() {
       .filter((row) => row.status === "draft")
       .map((row) => row.place_id)
   );
+  const hiddenSlugs = new Set(
+    ((indexData ?? []) as { slug: string; status: StoryStatus }[])
+      .filter((row) => row.status === "draft")
+      .map((row) => row.slug)
+  );
 
-  return { stories: (data as CloudStoryRow[]).map(cloudRowToStory), hiddenPlaceIds, available: true };
+  return { stories: (data as CloudStoryRow[]).map(cloudRowToStory), hiddenPlaceIds, hiddenSlugs, available: true };
+}
+
+export async function loadOwnerCloudStories(): Promise<CloudStoryLoadResult> {
+  if (!supabase) return { stories: [], hiddenPlaceIds: new Set(), hiddenSlugs: new Set(), available: false };
+
+  const { data, error } = await supabase
+    .from("stories")
+    .select("slug, place_id, title, preview_summary, body, status, featured, cover_url, gallery_urls");
+
+  if (error) {
+    if (import.meta.env.DEV) console.warn("Could not load owner cloud stories", error.message);
+    return { stories: [], hiddenPlaceIds: new Set(), hiddenSlugs: new Set(), available: false };
+  }
+
+  return { stories: (data as CloudStoryRow[]).map(cloudRowToStory), hiddenPlaceIds: new Set(), hiddenSlugs: new Set(), available: true };
 }
 
 export async function loadOwnerCloudStory(slug: string) {

@@ -7,17 +7,21 @@ export function getStartTime(place: Place) {
 }
 
 export function hasRealPreviewImage(place: Place) {
-  return Boolean(place.photo?.startsWith("/images/stories/"));
+  return isStoryImagePath(place.photo);
 }
 
-function hasRealImagePath(src?: string) {
-  return Boolean(src && src.startsWith("/images/stories/") && !src.includes(".gitkeep"));
+export function isStoryImagePath(src?: string) {
+  return Boolean(
+    src &&
+    !src.includes(".gitkeep") &&
+    (src.startsWith("/images/stories/") || /^https?:\/\//.test(src))
+  );
 }
 
 function isMeaningfulBlock(block: StoryBlock) {
   if (block.type === "text") return block.body.trim().length > 0;
-  if (block.type === "image") return hasRealImagePath(block.src);
-  if (block.type === "gallery") return block.images.some((image) => hasRealImagePath(image.src));
+  if (block.type === "image") return isStoryImagePath(block.src);
+  if (block.type === "gallery") return block.images.some((image) => isStoryImagePath(image.src));
   if (block.type === "quote") return block.body.trim().length > 0;
   if (block.type === "map") return Boolean(block.placeIds?.length || block.routeId);
   return false;
@@ -26,8 +30,8 @@ function isMeaningfulBlock(block: StoryBlock) {
 export function isMeaningfulStory(story?: Story) {
   if (!story || story.status !== "published") return false;
   return Boolean(
-    hasRealImagePath(story.coverImage) ||
-    hasRealImagePath(story.previewImage) ||
+    isStoryImagePath(story.coverImage) ||
+    isStoryImagePath(story.previewImage) ||
     story.blocks.some(isMeaningfulBlock)
   );
 }

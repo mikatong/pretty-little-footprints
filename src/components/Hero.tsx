@@ -8,6 +8,8 @@ type HeroProps = {
 };
 
 export function Hero({ placeCount, countryCount, sinceYear, selectedPlace }: HeroProps) {
+  const heroImage = selectedPlace.story?.coverImage ?? selectedPlace.story?.previewImage ?? selectedPlace.photo;
+
   return (
     <header className="hero">
       <nav className="hero-nav" aria-label="Primary">
@@ -40,7 +42,8 @@ export function Hero({ placeCount, countryCount, sinceYear, selectedPlace }: Her
           </div>
         </dl>
       </div>
-      <div className="hero-destination" aria-label="Selected destination">
+      <div className={`hero-destination${heroImage ? " hero-destination--with-image" : ""}`} aria-label="Selected destination">
+        {heroImage ? <img src={heroImage} alt={`${selectedPlace.name} story cover`} /> : null}
         <strong>{selectedPlace.name}</strong>
         <span>{selectedPlace.category === "lived" ? "lived" : "visited"}</span>
       </div>
