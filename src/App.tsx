@@ -8,6 +8,8 @@ import { StoryPage } from "./components/StoryPage";
 import { places } from "./data/places";
 import { stories } from "./data/stories";
 import {
+  compressStoryImage,
+  formatImageBytes,
   getFirstStoryText,
   getStoryGalleryUrls,
   isHeicNameOrType,
@@ -670,6 +672,12 @@ function LocalStoryComposerPage({
   return (
     <main className="compose-page">
       <form className="compose-card" onSubmit={onSave}>
+        <div className="compose-topline">
+          <div className="compose-navlinks">
+            <a className="upload-back" href="/">← Back to Atlas</a>
+            <a className="upload-back" href={`/stories/${story.slug}`}>View story</a>
+          </div>
+        </div>
         <p className="upload-kicker">Local Author Mode</p>
         <h1>{story.title}</h1>
 
@@ -795,6 +803,7 @@ function CloudStoryComposerPage({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [uploadProgress, setUploadProgress] = useState("");
+  const [uploadDetails, setUploadDetails] = useState<string[]>([]);
   const [storyUrl, setStoryUrl] = useState("");
   const selectedFiles = [...(coverFile ? [coverFile] : []), ...photoFiles];
 
@@ -883,27 +892,36 @@ function CloudStoryComposerPage({
     setSaving(true);
     setMessage("");
     setUploadProgress("");
+    setUploadDetails([]);
     setStoryUrl("");
 
     try {
-      if (selectedFiles.some(isHeicNameOrType)) {
-        throw new Error("HEIC upload is not supported yet. Please choose JPEG, PNG, or WebP.");
-      }
-
       let nextCoverUrl = coverUrl;
       const nextGalleryUrls = [...galleryUrls];
       const totalUploads = selectedFiles.length;
       let completedUploads = 0;
+      const compressionDetails: string[] = [];
+
+      const addCompressionDetail = (label: string, originalName: string, originalBytes: number, compressedBytes: number) => {
+        compressionDetails.push(`${label}: ${originalName} · ${formatImageBytes(originalBytes)} → ${formatImageBytes(compressedBytes)}`);
+        setUploadDetails([...compressionDetails]);
+      };
 
       if (coverFile) {
-        setUploadProgress(`Uploading 1 of ${totalUploads}...`);
-        nextCoverUrl = await uploadStoryImage(coverFile, session.user.id, story.slug, "cover");
+        setUploadProgress(`Compressing cover 1 of ${totalUploads}...`);
+        const compressedCover = await compressStoryImage(coverFile, "cover");
+        addCompressionDetail("Cover", compressedCover.originalName, compressedCover.originalBytes, compressedCover.compressedBytes);
+        setUploadProgress(`Uploading compressed cover 1 of ${totalUploads}...`);
+        nextCoverUrl = await uploadStoryImage(compressedCover.file, session.user.id, story.slug, "cover");
         completedUploads += 1;
       }
 
       for (const file of photoFiles) {
-        setUploadProgress(`Uploading ${completedUploads + 1} of ${totalUploads}...`);
-        nextGalleryUrls.push(await uploadStoryImage(file, session.user.id, story.slug, "gallery"));
+        setUploadProgress(`Compressing gallery ${completedUploads + 1} of ${totalUploads}...`);
+        const compressedPhoto = await compressStoryImage(file, "gallery");
+        addCompressionDetail("Gallery", compressedPhoto.originalName, compressedPhoto.originalBytes, compressedPhoto.compressedBytes);
+        setUploadProgress(`Uploading compressed gallery ${completedUploads + 1} of ${totalUploads}...`);
+        nextGalleryUrls.push(await uploadStoryImage(compressedPhoto.file, session.user.id, story.slug, "gallery"));
         completedUploads += 1;
       }
 
@@ -928,7 +946,7 @@ function CloudStoryComposerPage({
       setPhotoFiles([]);
       setStoryUrl(`/stories/${story.slug}`);
       setMessage(`Saved · ${getStatusLabel(savedStory.status)}`);
-      setUploadProgress("");
+      setUploadProgress(totalUploads > 0 ? `Uploaded ${totalUploads} compressed image${totalUploads === 1 ? "" : "s"}.` : "");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Save failed.");
       setUploadProgress("");
@@ -941,9 +959,13 @@ function CloudStoryComposerPage({
     <main className="compose-page">
       <form className="compose-card" onSubmit={onSave}>
         <div className="compose-topline">
-          <p className="upload-kicker">Cloud Composer</p>
+          <div className="compose-navlinks">
+            <a className="upload-back" href="/">← Back to Atlas</a>
+            {story ? <a className="upload-back" href={`/stories/${story.slug}`}>View story</a> : null}
+          </div>
           <button className="compose-signout" type="button" onClick={onSignOut}>Sign out</button>
         </div>
+        <p className="upload-kicker">Cloud Composer</p>
         <h1>{story.title}</h1>
 
         <label>
@@ -1020,6 +1042,14 @@ function CloudStoryComposerPage({
         </div>
 
         {uploadProgress ? <p className="upload-message">{uploadProgress}</p> : null}
+        {uploadDetails.length > 0 ? (
+          <section className="upload-files" aria-label="Compression results">
+            <strong>Compression</strong>
+            <ul>
+              {uploadDetails.map((detail) => <li key={detail}>{detail}</li>)}
+            </ul>
+          </section>
+        ) : null}
         {message ? <p className="upload-message">{message}</p> : null}
         {storyUrl ? <a className="upload-back" href={storyUrl}>Open Story: {storyUrl}</a> : null}
       </form>
