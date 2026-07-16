@@ -140,6 +140,25 @@ The seed preserves:
 
 Do not remove the static registry yet. The app still uses it as a fallback.
 
+## 6b. Migrate Existing Story Images
+
+After `public.stories` is seeded, migrate local files from `public/images/stories/` to Supabase Storage:
+
+```bash
+SUPABASE_URL="https://your-project-ref.supabase.co" \
+SUPABASE_SERVICE_ROLE_KEY="local-only-service-role-key" \
+SUPABASE_OWNER_USER_ID="your-auth-user-uuid" \
+npm run migrate:story-images
+```
+
+The script uploads images to:
+
+```text
+story-images/<user-id>/<slug>/<existing-filename>
+```
+
+It preserves the slug folder, updates `cover_url` and `gallery_urls`, fetches every new public URL, and reports missing rows, broken links, and remaining `/images/stories/` references. The service-role key is for this local migration command only. Do not commit it, put it in `.env`, or add it to Vercel.
+
 ## 7. Test Login
 
 Run locally:
