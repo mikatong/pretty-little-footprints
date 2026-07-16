@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "seed:stories": "node scripts/create-supabase-story-seed.mjs",
-    "migrate:story-images": "node scripts/migrate-story-images-to-supabase.mjs"
+    "migrate:story-images": "node scripts/migrate-story-images-to-supabase.mjs",
+    "migrate:story-images:webp": "node scripts/compress-and-upload-story-images.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.6",
