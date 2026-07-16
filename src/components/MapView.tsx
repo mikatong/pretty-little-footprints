@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { MapIconType, MapPoint, Place } from "../types";
@@ -503,12 +503,23 @@ const setCursor = (map: maplibregl.Map, cursor: string) => {
   map.getCanvas().style.cursor = cursor;
 };
 
+const hideUnrelatedMapLabels = (map: maplibregl.Map) => {
+  map.getStyle().layers?.forEach((layer) => {
+    if (layer.type !== "symbol") return;
+    const id = layer.id.toLowerCase();
+    if (/(city|town|village|settlement|neighbourhood|poi|transit|airport|road)/.test(id)) {
+      map.setLayoutProperty(layer.id, "visibility", "none");
+    }
+  });
+};
+
 export function MapView({ places, selectedPlace, activeYear, meaningfulStories, onSelect }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const lastCameraSelectionRef = useRef<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(true);
   const pointData = useMemo(() => getPointFeatureCollection(places, selectedPlace), [places, selectedPlace]);
   const yearRouteData = useMemo(() => getYearRouteFeatureCollection(places, activeYear, selectedPlace), [places, activeYear, selectedPlace]);
   const selectedRouteData = useMemo(() => getSelectedRouteFeatureCollection(selectedPlace), [selectedPlace]);
@@ -533,6 +544,7 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     map.on("load", () => {
       void (async () => {
+        hideUnrelatedMapLabels(map);
         await registerMapIcons(map);
         await registerStoryPreviewImages(map, meaningfulStories);
         map.addSource(yearRouteSourceId, { type: "geojson", data: emptyFeatureCollection });
@@ -646,15 +658,31 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
     }
   }, [selectedPlace, mapReady]);
 
+  const returnToSelectedPlace = useCallback(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    setPreviewOpen(false);
+    const routePoints = getValidPoints(selectedPlace);
+    if (routePoints.length > 1) {
+      const bounds = new maplibregl.LngLatBounds();
+      routePoints.forEach((point) => bounds.extend(point.coordinates));
+      map.fitBounds(bounds, { padding: window.innerWidth < 700 ? 46 : 72, maxZoom: 3.4, duration: 520, essential: true });
+      return;
+    }
+    const point = getPrimaryPoint(selectedPlace);
+    if (point) map.easeTo({ center: point.coordinates, zoom: Math.max(map.getZoom(), 2.2), duration: 520, essential: true });
+  }, [mapReady, selectedPlace]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
     popupRef.current?.remove();
+    if (!previewOpen) return;
     const primaryPoint = getPrimaryPoint(selectedPlace);
     const html = getSelectedPreviewHtml(selectedPlace);
     if (!primaryPoint || !html) return;
     popupRef.current = new maplibregl.Popup({
-      closeButton: false,
+      closeButton: true,
       closeOnClick: false,
       className: "journal-map-popup",
       offset: 18,
@@ -663,11 +691,18 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
       .setLngLat(primaryPoint.coordinates)
       .setHTML(html)
       .addTo(map);
-  }, [selectedPlace, mapReady]);
+  }, [selectedPlace, mapReady, previewOpen]);
+
+  useEffect(() => {
+    setPreviewOpen(true);
+  }, [selectedPlace.id]);
 
   return (
     <div className="map-shell">
       <div ref={containerRef} className="map-view" aria-label="Interactive travel footprint map" />
+      <button className="map-home-control" type="button" onClick={returnToSelectedPlace} aria-label={`Return to ${selectedPlace.name}`}>
+        Home
+      </button>
     </div>
   );
 }

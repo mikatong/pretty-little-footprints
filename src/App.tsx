@@ -1079,7 +1079,8 @@ export default function App() {
     return timelinePlaces.find((place) => place.id === storedId);
   }, [timelinePlaces]);
   const initialPlace = storedSelectedPlace ?? latestFeaturedPlace ?? timelinePlaces.find((place) => getStartYear(place) === latestYear) ?? timelinePlaces[0] ?? places[0];
-  const [selectedPlace, setSelectedPlace] = useState<Place>(initialPlace);
+  // The place id is the single selection source for the timeline, map, routes, and story rail.
+  const [selectedPlaceId, setSelectedPlaceId] = useState(initialPlace.id);
   const [activeYear, setActiveYear] = useState(() => getStartYear(initialPlace));
   const [mapOpen, setMapOpen] = useState(false);
   const [expandedYears, setExpandedYears] = useState<Set<string>>(() => new Set([latestYear]));
@@ -1097,7 +1098,7 @@ export default function App() {
   const visiblePlaces = useMemo(() => {
     return cloudStoriesAvailable ? mergeCloudStories(timelinePlaces, cloudStories, hiddenCloudDraftPlaceIds, hiddenCloudDraftSlugs) : timelinePlaces;
   }, [cloudStories, cloudStoriesAvailable, hiddenCloudDraftPlaceIds, hiddenCloudDraftSlugs, timelinePlaces]);
-  const selectedVisiblePlace = visiblePlaces.find((place) => place.id === selectedPlace.id) ?? selectedPlace;
+  const selectedVisiblePlace = visiblePlaces.find((place) => place.id === selectedPlaceId) ?? initialPlace;
 
   const storyPlaces = useMemo(() => {
     const storyEntries = getFeaturedStories(visiblePlaces);
@@ -1135,12 +1136,12 @@ export default function App() {
   }, [currentStoryPlace, meaningfulStories, timelinePlaces]);
 
   useEffect(() => {
-    const year = getStartYear(selectedPlace);
+    const year = getStartYear(selectedVisiblePlace);
     setExpandedYears((current: Set<string>) => {
       if (current.has(year)) return current;
       return new Set([...current, year]);
     });
-  }, [selectedPlace]);
+  }, [selectedVisiblePlace]);
 
   useEffect(() => {
     if (!isTimelinePath(routePath)) return;
@@ -1203,7 +1204,7 @@ export default function App() {
   const handleSelectPlace = useCallback((place: Place) => {
     window.sessionStorage.setItem(selectedPlaceStorageKey, place.id);
     setActiveYear(getStartYear(place));
-    setSelectedPlace(place);
+    setSelectedPlaceId(place.id);
   }, []);
 
   const handleSignOut = useCallback(() => {
