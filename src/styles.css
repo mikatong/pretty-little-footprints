@@ -74,12 +74,12 @@ img {
   gap: 24px;
 }
 
-.wordmark {
+.hero-nav .wordmark {
   display: grid;
   gap: 4px;
   color: var(--text);
   font-family: "Cormorant Infant", Georgia, serif;
-  font-size: clamp(30px, 3vw, 44px);
+  font-size: clamp(34px, 3.8vw, 54px);
   font-style: normal;
   font-weight: 400;
   letter-spacing: 0.075em;
@@ -88,7 +88,7 @@ img {
   text-transform: uppercase;
 }
 
-.wordmark small {
+.hero-nav .wordmark small {
   color: #a17b58;
   font-family: "Cormorant Infant", Georgia, serif;
   font-size: 18px;
@@ -191,12 +191,148 @@ img {
 }
 
 .story-panel {
-  flex: 0 0 196px;
+  flex: 0 0 246px;
   min-height: 0;
   overflow: hidden;
-  padding: 14px 18px 16px;
+  padding: 14px 18px;
   border-top: 1px solid var(--border);
   background: rgba(255, 253, 252, 0.58);
+}
+
+.atlas-story-rail {
+  display: grid;
+  grid-template-columns: 190px 266px minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.rail-selected-copy {
+  display: grid;
+  align-content: center;
+  gap: 7px;
+  padding: 6px 10px 6px 2px;
+}
+
+.rail-selected-copy p,
+.rail-selected-copy small,
+.rail-story-card small {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.rail-selected-copy p {
+  font-family: "IBM Plex Sans", Inter, sans-serif;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.rail-selected-copy strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--place-accent, var(--accent));
+  font-family: "Instrument Serif", Georgia, serif;
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 0.95;
+}
+
+.rail-selected-glyph {
+  width: 26px;
+  height: 26px;
+}
+
+.rail-selected-copy em {
+  margin-top: 7px;
+  color: var(--text);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.4;
+}
+
+.rail-selected-copy a {
+  margin-top: 7px;
+  color: var(--place-accent, var(--accent));
+  font-family: "IBM Plex Sans", Inter, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.rail-selected-image,
+.rail-story-card {
+  border: 1px solid rgba(231, 222, 210, 0.85);
+  border-radius: 11px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 8px 22px rgba(44, 36, 31, 0.055);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.rail-selected-image {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  padding: 0;
+  background: var(--place-accent-pale, #eee5d8);
+}
+
+.rail-selected-image img,
+.rail-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.rail-selected-image > svg {
+  width: 72px;
+  height: 72px;
+}
+
+.rail-story-cards {
+  display: flex;
+  min-width: 0;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.rail-story-card {
+  display: grid;
+  grid-template-rows: 138px auto auto;
+  flex: 0 0 146px;
+  gap: 5px;
+  padding: 0 0 9px;
+  text-align: left;
+}
+
+.rail-story-card strong,
+.rail-story-card small {
+  padding: 0 10px;
+}
+
+.rail-story-card strong {
+  font-family: "Instrument Serif", Georgia, serif;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.rail-card-image {
+  display: grid;
+  overflow: hidden;
+  background: #eee5d8;
+}
+
+.rail-card-image > svg {
+  width: 48px;
+  height: 48px;
+  place-self: center;
 }
 
 .timeline-scroll {
@@ -1280,6 +1416,24 @@ img {
   .story-panel {
     order: 4;
     flex-basis: auto;
+  }
+
+  .atlas-story-rail {
+    display: flex;
+    min-height: 230px;
+    overflow-x: auto;
+  }
+
+  .rail-selected-copy {
+    min-width: 190px;
+  }
+
+  .rail-selected-image {
+    min-width: 220px;
+  }
+
+  .rail-story-cards {
+    overflow: visible;
   }
 
   .map-section {

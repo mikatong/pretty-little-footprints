@@ -261,6 +261,53 @@ function Timeline({
   );
 }
 
+function AtlasStoryRail({
+  selectedPlace,
+  storyPlaces,
+  onSelect,
+}: {
+  selectedPlace: Place;
+  storyPlaces: Place[];
+  onSelect: (place: Place) => void;
+}) {
+  const selectedStory = selectedPlace.story;
+  const selectedImage = selectedStory?.previewImage ?? selectedStory?.coverImage ?? selectedPlace.photo;
+  const selectedText = selectedStory?.previewSummary ?? selectedStory?.dek ?? selectedPlace.note;
+  const railPlaces = storyPlaces.filter((place) => place.id !== selectedPlace.id);
+  const accent = getPlaceAccent(selectedPlace);
+
+  return (
+    <aside className="story-panel atlas-story-rail" id="stories" style={{ "--place-accent": accent.primary, "--place-accent-pale": accent.pale } as Record<string, string>}>
+      <section className="rail-selected-copy" aria-label="Selected place story">
+        <p>{selectedPlace.dateLabel}</p>
+        <strong><PlaceGlyph place={selectedPlace} className="rail-selected-glyph" />{selectedStory?.title ?? selectedPlace.name}</strong>
+        <small>{selectedPlace.country}</small>
+        {selectedText ? <em>{selectedText}</em> : null}
+        {selectedStory ? <a href={`/stories/${selectedStory.slug}`}>Read full story →</a> : null}
+      </section>
+
+      <button className="rail-selected-image" type="button" onClick={() => onSelect(selectedPlace)} aria-label={`Select ${selectedPlace.name}`}>
+        {selectedImage ? <img src={selectedImage} alt={`${selectedPlace.name} travel memory`} /> : <PlaceGlyph place={selectedPlace} />}
+      </button>
+
+      <div className="rail-story-cards" aria-label="More featured stories">
+        {railPlaces.map((place) => {
+          const image = place.story?.previewImage ?? place.story?.coverImage ?? place.photo;
+          return (
+            <button className="rail-story-card" key={place.id} type="button" onClick={() => onSelect(place)}>
+              <span className="rail-card-image">
+                {image ? <img src={image} alt={`${place.name} travel memory`} /> : <PlaceGlyph place={place} />}
+              </span>
+              <strong>{place.story?.title ?? place.name}</strong>
+              <small>{place.country}</small>
+            </button>
+          );
+        })}
+      </div>
+    </aside>
+  );
+}
+
 function FullTimelinePage({
   visiblePlaces,
   selectedPlace,
@@ -1358,23 +1405,11 @@ export default function App() {
             />
           </div>
 
-          <aside className="story-panel" id="stories">
-            <div className="module-header">
-              <p>Featured Stories</p>
-              <a href="/stories">View all →</a>
-            </div>
-            <div className="story-list">
-              {storyPlaces.map((place) => (
-                <PlaceCard
-                  key={place.id}
-                  place={place}
-                  month={place.dateLabel}
-                  selected={selectedVisiblePlace.id === place.id}
-                  onSelect={handleSelectPlace}
-                />
-              ))}
-            </div>
-          </aside>
+          <AtlasStoryRail
+            selectedPlace={selectedVisiblePlace}
+            storyPlaces={storyPlaces}
+            onSelect={handleSelectPlace}
+          />
         </section>
       </section>
     </main>
