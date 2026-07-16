@@ -6,16 +6,20 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "seed:stories": "node scripts/create-supabase-story-seed.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.110.6",
     "@vitejs/plugin-react": "latest",
-    "vite": "latest",
-    "typescript": "latest",
+    "lucide-react": "latest",
+    "maplibre-gl": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "maplibre-gl": "latest",
-    "lucide-react": "latest"
+    "typescript": "latest",
+    "vite": "latest"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@types/node": "^26.1.1"
+  }
 }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { Hero } from "./components/Hero";
 import { MapView } from "./components/MapView";
 import { PlaceCard } from "./components/PlaceCard";
@@ -6,6 +7,17 @@ import { PlaceGlyph } from "./components/PlaceGlyph";
 import { StoryPage } from "./components/StoryPage";
 import { places } from "./data/places";
 import { stories } from "./data/stories";
+import {
+  getFirstStoryText,
+  getStoryGalleryUrls,
+  isHeicNameOrType,
+  loadOwnerCloudStory,
+  loadPublishedCloudStories,
+  mergeCloudStories,
+  saveCloudStory,
+  uploadStoryImage,
+} from "./lib/cloudStories";
+import { isSupabaseConfigured, supabase } from "./lib/supabase";
 import { getPlaceAccent } from "./placePresentation";
 import {
   getFeaturedStories,
@@ -72,9 +84,19 @@ function isUploadPath(pathname = window.location.pathname) {
   return pathname.replace(/\/$/, "") === "/upload";
 }
 
+function isLoginPath(pathname = window.location.pathname) {
+  return pathname.replace(/\/$/, "") === "/login";
+}
+
 function getComposeSlugFromPath(pathname = window.location.pathname) {
   const match = pathname.match(/^\/compose\/([^/]+)\/?$/);
   return match ? decodeURIComponent(match[1]) : null;
+}
+
+function getLoginRedirect() {
+  const params = new URLSearchParams(window.location.search);
+  const redirect = params.get("redirect");
+  return redirect?.startsWith("/") ? redirect : "/";
 }
 
 function hasKnownMonth(place: Place) {
@@ -317,6 +339,10 @@ function isHeicFile(file: File) {
   return file.type === "image/heic" || file.type === "image/heif" || name.endsWith(".heic") || name.endsWith(".heif");
 }
 
+function getStatusLabel(status: Story["status"]) {
+  return status === "published" ? "Published" : "Draft";
+}
+
 function getFirstTextBlock(story: Story) {
   return story.blocks.find((block) => block.type === "text");
 }
@@ -458,7 +484,72 @@ function UploadPage() {
   );
 }
 
-function StoryComposerPage({
+function LoginPage({ session }: { session: Session | null }) {
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const redirectTo = getLoginRedirect();
+
+  const onSubmit = async (event: { preventDefault: () => void }) => {
+    event.preventDefault();
+    setMessage("");
+
+    if (!supabase) {
+      setMessage("Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.");
+      return;
+    }
+
+    setSending(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: `${window.location.origin}${redirectTo}` },
+      });
+      if (error) throw new Error(error.message);
+      setMessage("Check your email for the magic link.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not send login link.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <main className="compose-page">
+      <form className="compose-card" onSubmit={onSubmit}>
+        <p className="upload-kicker">Owner Login</p>
+        <h1>Sign in to edit stories</h1>
+        {session ? (
+          <>
+            <p className="upload-message">Signed in as {session.user.email ?? "owner"}.</p>
+            <a className="upload-back" href={redirectTo}>Continue</a>
+          </>
+        ) : (
+          <>
+            <label>
+              <span>Email</span>
+              <input
+                inputMode="email"
+                type="email"
+                value={email}
+                onChange={(event: { target: HTMLInputElement }) => setEmail(event.target.value)}
+                placeholder="you@example.com"
+                required
+              />
+            </label>
+            <button className="upload-button" type="submit" disabled={sending}>
+              {sending ? "Sending..." : "Send Magic Link"}
+            </button>
+          </>
+        )}
+        {message ? <p className="upload-message">{message}</p> : null}
+        <a className="upload-back" href="/">Back to atlas</a>
+      </form>
+    </main>
+  );
+}
+
+function LocalStoryComposerPage({
   place,
   relatedPlaces,
   meaningfulStories,
@@ -567,7 +658,7 @@ function StoryComposerPage({
       setCoverFile(null);
       setPhotoFiles([]);
       setStoryUrl(localUrl);
-      setMessage(`Saved · ${savedStatus === "published" ? "Published" : "Draft"}`);
+      setMessage(`Saved · ${getStatusLabel(savedStatus)}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Save failed.");
     } finally {
@@ -672,6 +763,280 @@ function StoryComposerPage({
   );
 }
 
+function CloudStoryComposerPage({
+  place,
+  session,
+  relatedPlaces,
+  meaningfulStories,
+  onSelectPlace,
+  onSignOut,
+}: {
+  place: Place | null;
+  session: Session | null;
+  relatedPlaces: Place[];
+  meaningfulStories: Place[];
+  onSelectPlace: (place: Place) => void;
+  onSignOut: () => void;
+}) {
+  const staticStory = place?.story;
+  const [loadedStory, setLoadedStory] = useState<Story | null>(staticStory ?? null);
+  const story = loadedStory ?? staticStory;
+  const [title, setTitle] = useState(story?.title ?? "");
+  const [previewSummary, setPreviewSummary] = useState(story?.previewSummary ?? story?.dek ?? "");
+  const [body, setBody] = useState(story ? getFirstStoryText(story) : "");
+  const [status, setStatus] = useState<Story["status"]>(story?.status ?? "draft");
+  const [featured, setFeatured] = useState(Boolean(story?.featured));
+  const [coverUrl, setCoverUrl] = useState(story?.coverImage ?? "");
+  const [galleryUrls, setGalleryUrls] = useState<string[]>(story ? getStoryGalleryUrls(story) : []);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [showPreview, setShowPreview] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [uploadProgress, setUploadProgress] = useState("");
+  const [storyUrl, setStoryUrl] = useState("");
+  const selectedFiles = [...(coverFile ? [coverFile] : []), ...photoFiles];
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!staticStory) return;
+
+    setMessage("");
+    setLoadedStory(staticStory);
+    setTitle(staticStory.title);
+    setPreviewSummary(staticStory.previewSummary ?? staticStory.dek ?? "");
+    setBody(getFirstStoryText(staticStory));
+    setStatus(staticStory.status);
+    setFeatured(Boolean(staticStory.featured));
+    setCoverUrl(staticStory.coverImage ?? "");
+    setGalleryUrls(getStoryGalleryUrls(staticStory));
+
+    loadOwnerCloudStory(staticStory.slug)
+      .then((cloudStory) => {
+        if (cancelled || !cloudStory) return;
+        setLoadedStory(cloudStory);
+        setTitle(cloudStory.title);
+        setPreviewSummary(cloudStory.previewSummary ?? cloudStory.dek ?? "");
+        setBody(getFirstStoryText(cloudStory));
+        setStatus(cloudStory.status);
+        setFeatured(Boolean(cloudStory.featured));
+        setCoverUrl(cloudStory.coverImage ?? "");
+        setGalleryUrls(getStoryGalleryUrls(cloudStory));
+      })
+      .catch((error) => {
+        if (!cancelled) setMessage(error instanceof Error ? error.message : "Could not load cloud Story.");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [staticStory]);
+
+  if (!isSupabaseConfigured) {
+    return (
+      <main className="compose-page">
+        <section className="compose-card">
+          <p className="upload-kicker">Cloud Composer</p>
+          <h1>Supabase is not configured.</h1>
+          <p className="upload-message">Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY to enable cloud editing.</p>
+          <a className="upload-back" href="/">Back to atlas</a>
+        </section>
+      </main>
+    );
+  }
+
+  if (!session) {
+    return <LoginPage session={null} />;
+  }
+
+  if (!place?.story || !story) {
+    return (
+      <main className="compose-page">
+        <section className="compose-card">
+          <p className="upload-kicker">Cloud Composer</p>
+          <h1>Story not found</h1>
+          <a className="upload-back" href="/">Back to atlas</a>
+        </section>
+      </main>
+    );
+  }
+
+  const previewStory = getComposerStory(story, { title, previewSummary, body, status, featured, coverImage: coverUrl });
+  if (galleryUrls.length > 0 && !previewStory.blocks.some((block) => block.type === "gallery")) {
+    previewStory.blocks.push({
+      id: `${story.slug}-gallery`,
+      type: "gallery",
+      layout: "grid",
+      images: galleryUrls.map((src) => ({ src, alt: `${title} photo` })),
+    });
+  }
+  const previewPlace: Place = {
+    ...place,
+    story: previewStory,
+    featured,
+    photo: previewStory.previewImage ?? previewStory.coverImage ?? place.photo,
+  };
+
+  const onSave = async (event: { preventDefault: () => void }) => {
+    event.preventDefault();
+    setSaving(true);
+    setMessage("");
+    setUploadProgress("");
+    setStoryUrl("");
+
+    try {
+      if (selectedFiles.some(isHeicNameOrType)) {
+        throw new Error("HEIC upload is not supported yet. Please choose JPEG, PNG, or WebP.");
+      }
+
+      let nextCoverUrl = coverUrl;
+      const nextGalleryUrls = [...galleryUrls];
+      const totalUploads = selectedFiles.length;
+      let completedUploads = 0;
+
+      if (coverFile) {
+        setUploadProgress(`Uploading 1 of ${totalUploads}...`);
+        nextCoverUrl = await uploadStoryImage(coverFile, session.user.id, story.slug, "cover");
+        completedUploads += 1;
+      }
+
+      for (const file of photoFiles) {
+        setUploadProgress(`Uploading ${completedUploads + 1} of ${totalUploads}...`);
+        nextGalleryUrls.push(await uploadStoryImage(file, session.user.id, story.slug, "gallery"));
+        completedUploads += 1;
+      }
+
+      setUploadProgress("Saving Story...");
+      const savedStory = await saveCloudStory({
+        slug: story.slug,
+        placeId: story.placeId,
+        title,
+        previewSummary,
+        body,
+        status,
+        featured,
+        coverUrl: nextCoverUrl,
+        galleryUrls: nextGalleryUrls,
+        userId: session.user.id,
+      });
+
+      setLoadedStory(savedStory);
+      setCoverUrl(savedStory.coverImage ?? "");
+      setGalleryUrls(getStoryGalleryUrls(savedStory));
+      setCoverFile(null);
+      setPhotoFiles([]);
+      setStoryUrl(`/stories/${story.slug}`);
+      setMessage(`Saved · ${getStatusLabel(savedStory.status)}`);
+      setUploadProgress("");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Save failed.");
+      setUploadProgress("");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <main className="compose-page">
+      <form className="compose-card" onSubmit={onSave}>
+        <div className="compose-topline">
+          <p className="upload-kicker">Cloud Composer</p>
+          <button className="compose-signout" type="button" onClick={onSignOut}>Sign out</button>
+        </div>
+        <h1>{story.title}</h1>
+
+        <label>
+          <span>Story Title</span>
+          <input value={title} onChange={(event: { target: HTMLInputElement }) => setTitle(event.target.value)} required />
+        </label>
+
+        <label>
+          <span>Preview Summary</span>
+          <textarea value={previewSummary} rows={3} onChange={(event: { target: HTMLTextAreaElement }) => setPreviewSummary(event.target.value)} />
+        </label>
+
+        <label>
+          <span>Cover Image URL</span>
+          <input value={coverUrl} onChange={(event: { target: HTMLInputElement }) => setCoverUrl(event.target.value)} placeholder="Supabase Storage public URL" />
+        </label>
+
+        <label>
+          <span>Cover Upload</span>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif"
+            onChange={(event: { target: HTMLInputElement }) => setCoverFile(event.target.files?.[0] ?? null)}
+          />
+        </label>
+
+        <label>
+          <span>Gallery Upload</span>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif"
+            multiple
+            onChange={(event: { target: HTMLInputElement }) => setPhotoFiles(Array.from(event.target.files ?? []))}
+          />
+        </label>
+
+        <section className="upload-files" aria-label="Selected files">
+          <strong>Selected Files</strong>
+          {selectedFiles.length > 0 ? (
+            <ul>
+              {coverFile ? <li>Cover: {coverFile.name}</li> : null}
+              {photoFiles.map((file) => <li key={`${file.name}-${file.lastModified}`}>{file.name}</li>)}
+            </ul>
+          ) : (
+            <p>No files selected.</p>
+          )}
+        </section>
+
+        <label>
+          <span>Main Story Text</span>
+          <textarea value={body} rows={10} onChange={(event: { target: HTMLTextAreaElement }) => setBody(event.target.value)} />
+        </label>
+
+        <label>
+          <span>Status</span>
+          <select value={status} onChange={(event: { target: HTMLSelectElement }) => setStatus(event.target.value as Story["status"])}>
+            <option value="draft">Draft</option>
+            <option value="published">Published</option>
+          </select>
+        </label>
+
+        <label className="compose-toggle">
+          <input type="checkbox" checked={featured} onChange={(event: { target: HTMLInputElement }) => setFeatured(event.target.checked)} />
+          <span>Featured</span>
+        </label>
+
+        <div className="compose-actions">
+          <button className="upload-button secondary" type="button" onClick={() => setShowPreview((shown: boolean) => !shown)}>
+            Preview
+          </button>
+          <button className="upload-button" type="submit" disabled={saving}>
+            {saving ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
+
+        {uploadProgress ? <p className="upload-message">{uploadProgress}</p> : null}
+        {message ? <p className="upload-message">{message}</p> : null}
+        {storyUrl ? <a className="upload-back" href={storyUrl}>Open Story: {storyUrl}</a> : null}
+      </form>
+
+      {showPreview ? (
+        <section className="compose-preview" aria-label="Story preview">
+          <StoryPage
+            place={previewPlace}
+            relatedPlaces={relatedPlaces}
+            meaningfulStories={meaningfulStories}
+            onSelectPlace={onSelectPlace}
+          />
+        </section>
+      ) : null}
+    </main>
+  );
+}
+
 export default function App() {
   const timelinePlaces = useMemo(() => getTimelinePlaces(), []);
   const latestYear = useMemo(() => {
@@ -688,23 +1053,34 @@ export default function App() {
   const [mapOpen, setMapOpen] = useState(false);
   const [expandedYears, setExpandedYears] = useState<Set<string>>(() => new Set([latestYear]));
   const [routePath, setRoutePath] = useState(() => window.location.pathname);
+  const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(isSupabaseConfigured);
+  const [cloudStories, setCloudStories] = useState<Story[]>([]);
+  const [hiddenCloudDraftPlaceIds, setHiddenCloudDraftPlaceIds] = useState<Set<string>>(() => new Set());
+  const [cloudStoriesAvailable, setCloudStoriesAvailable] = useState(false);
   const storySlug = useMemo(() => getStorySlugFromPath(), [routePath]);
   const composeSlug = useMemo(() => getComposeSlugFromPath(routePath), [routePath]);
+  const loginPath = useMemo(() => isLoginPath(routePath), [routePath]);
+  const useCloudComposer = isSupabaseConfigured;
+  const visiblePlaces = useMemo(() => {
+    return cloudStoriesAvailable ? mergeCloudStories(timelinePlaces, cloudStories, hiddenCloudDraftPlaceIds) : timelinePlaces;
+  }, [cloudStories, cloudStoriesAvailable, hiddenCloudDraftPlaceIds, timelinePlaces]);
+  const selectedVisiblePlace = visiblePlaces.find((place) => place.id === selectedPlace.id) ?? selectedPlace;
 
   const storyPlaces = useMemo(() => {
-    const storyEntries = getFeaturedStories(timelinePlaces);
-    if (selectedPlace.story?.featured && hasMeaningfulStoryContent(selectedPlace) && !storyEntries.some((place) => place.id === selectedPlace.id)) {
-      return [selectedPlace, ...storyEntries];
+    const storyEntries = getFeaturedStories(visiblePlaces);
+    if (selectedVisiblePlace.story?.featured && hasMeaningfulStoryContent(selectedVisiblePlace) && !storyEntries.some((place) => place.id === selectedVisiblePlace.id)) {
+      return [selectedVisiblePlace, ...storyEntries];
     }
     return storyEntries;
-  }, [selectedPlace, timelinePlaces]);
+  }, [selectedVisiblePlace, visiblePlaces]);
 
-  const meaningfulStories = useMemo(() => getMeaningfulStories(timelinePlaces), [timelinePlaces]);
+  const meaningfulStories = useMemo(() => getMeaningfulStories(visiblePlaces), [visiblePlaces]);
 
   const currentStoryPlace = useMemo(() => {
     if (!storySlug) return null;
-    return timelinePlaces.find((place) => place.story?.slug === storySlug) ?? null;
-  }, [storySlug, timelinePlaces]);
+    return visiblePlaces.find((place) => place.story?.slug === storySlug) ?? null;
+  }, [storySlug, visiblePlaces]);
 
   const composerStoryPlace = useMemo(() => {
     if (!composeSlug) return null;
@@ -746,10 +1122,58 @@ export default function App() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
+  useEffect(() => {
+    if (!supabase) {
+      setAuthLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!cancelled) {
+        setSession(data.session);
+        setAuthLoading(false);
+      }
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setAuthLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadPublishedCloudStories().then((result) => {
+      if (cancelled) return;
+      setCloudStories(result.stories);
+      setHiddenCloudDraftPlaceIds(result.hiddenPlaceIds ?? new Set());
+      setCloudStoriesAvailable(result.available);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!composeSlug || !useCloudComposer || authLoading || session) return;
+    const redirect = `/login?redirect=${encodeURIComponent(`/compose/${composeSlug}`)}`;
+    window.history.replaceState({}, "", redirect);
+    setRoutePath(window.location.pathname);
+  }, [authLoading, composeSlug, session, useCloudComposer]);
+
   const handleSelectPlace = useCallback((place: Place) => {
     window.sessionStorage.setItem(selectedPlaceStorageKey, place.id);
     setActiveYear(getStartYear(place));
     setSelectedPlace(place);
+  }, []);
+
+  const handleSignOut = useCallback(() => {
+    void supabase?.auth.signOut();
   }, []);
 
   const handleToggleYear = useCallback((year: string) => {
@@ -768,9 +1192,39 @@ export default function App() {
     return <UploadPage />;
   }
 
+  if (loginPath) {
+    return <LoginPage session={session} />;
+  }
+
   if (composeSlug) {
+    if (useCloudComposer) {
+      if (authLoading) {
+        return (
+          <main className="compose-page">
+            <section className="compose-card">
+              <p className="upload-kicker">Cloud Composer</p>
+              <h1>Checking login...</h1>
+            </section>
+          </main>
+        );
+      }
+
+      if (!session) return <LoginPage session={null} />;
+
+      return (
+        <CloudStoryComposerPage
+          place={composerStoryPlace}
+          session={session}
+          relatedPlaces={relatedStoryPlaces}
+          meaningfulStories={meaningfulStories}
+          onSelectPlace={handleSelectPlace}
+          onSignOut={handleSignOut}
+        />
+      );
+    }
+
     return (
-      <StoryComposerPage
+      <LocalStoryComposerPage
         place={composerStoryPlace}
         relatedPlaces={relatedStoryPlaces}
         meaningfulStories={meaningfulStories}
@@ -782,8 +1236,8 @@ export default function App() {
   if (isTimelinePath(routePath)) {
     return (
       <FullTimelinePage
-        visiblePlaces={timelinePlaces}
-        selectedPlace={selectedPlace}
+        visiblePlaces={visiblePlaces}
+        selectedPlace={selectedVisiblePlace}
         expandedYears={expandedYears}
         onToggleYear={handleToggleYear}
         onActivateYear={setActiveYear}
@@ -796,7 +1250,7 @@ export default function App() {
     return (
       <StoriesArchivePage
         stories={[...meaningfulStories].reverse()}
-        selectedPlace={selectedPlace}
+        selectedPlace={selectedVisiblePlace}
         onSelect={handleSelectPlace}
       />
     );
@@ -834,22 +1288,22 @@ export default function App() {
 
   return (
     <main className="app-shell">
-      {import.meta.env.DEV && selectedPlace.story ? (
-        <a className="author-edit-button" href={`/compose/${selectedPlace.story.slug}`}>
+      {(import.meta.env.DEV || session) && (session ? selectedPlace.story : selectedVisiblePlace.story) ? (
+        <a className="author-edit-button" href={`/compose/${(session ? selectedPlace.story : selectedVisiblePlace.story)?.slug}`}>
           Edit
         </a>
       ) : null}
       <Hero
-        placeCount={getPlaceCount(timelinePlaces)}
-        countryCount={getCountryCount(timelinePlaces)}
+        placeCount={getPlaceCount(visiblePlaces)}
+        countryCount={getCountryCount(visiblePlaces)}
         sinceYear={sinceYear}
-        selectedPlace={selectedPlace}
+        selectedPlace={selectedVisiblePlace}
       />
 
       <section className="atlas-layout">
         <Timeline
-          visiblePlaces={timelinePlaces}
-          selectedPlace={selectedPlace}
+          visiblePlaces={visiblePlaces}
+          selectedPlace={selectedVisiblePlace}
           expandedYears={expandedYears}
           onToggleYear={handleToggleYear}
           onActivateYear={setActiveYear}
@@ -862,8 +1316,8 @@ export default function App() {
           </button>
           <div className="map-panel">
             <MapView
-              places={timelinePlaces}
-              selectedPlace={selectedPlace}
+              places={visiblePlaces}
+              selectedPlace={selectedVisiblePlace}
               activeYear={activeYear}
               meaningfulStories={meaningfulStories}
               onSelect={handleSelectPlace}
@@ -881,7 +1335,7 @@ export default function App() {
                   key={place.id}
                   place={place}
                   month={place.dateLabel}
-                  selected={selectedPlace.id === place.id}
+                  selected={selectedVisiblePlace.id === place.id}
                   onSelect={handleSelectPlace}
                 />
               ))}
