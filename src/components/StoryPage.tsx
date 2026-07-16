@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import type { Place, StoryBlock, StoryImageOrientation } from "../types";
 
 type StoryPageProps = {
@@ -18,11 +19,30 @@ function StoryImage({
   caption?: string;
   orientation?: StoryImageOrientation;
 }) {
+  const [detectedOrientation, setDetectedOrientation] = useState<StoryImageOrientation | null>(null);
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const actualOrientation = detectedOrientation ?? orientation;
+  const detectOrientation = (image: HTMLImageElement) => {
+    const { naturalWidth: width, naturalHeight: height } = image;
+    if (!width || !height) return;
+    setDetectedOrientation(width === height ? "square" : width > height ? "landscape" : "portrait");
+  };
+
+  useEffect(() => {
+    setDetectedOrientation(null);
+    const image = imageRef.current;
+    if (image?.complete) detectOrientation(image);
+  }, [src]);
+
   return (
-    <figure className={`story-image ${orientation}`}>
+    <figure className={`story-image ${actualOrientation}`}>
       <img
         src={src}
         alt={alt ?? ""}
+        ref={imageRef}
+        onLoad={(event: { currentTarget: HTMLImageElement }) => {
+          detectOrientation(event.currentTarget);
+        }}
         onError={(event: { currentTarget: HTMLImageElement }) => {
           if (import.meta.env.DEV) {
             console.warn(`Missing story image: ${src}`);
@@ -111,7 +131,7 @@ export function StoryPage({ place, relatedPlaces, meaningfulStories, onSelectPla
         <p className="story-meta">{story?.status === "draft" ? "Draft" : "Story"}</p>
         {story?.dek ? <p className="story-summary">{story.dek}</p> : null}
         {story?.coverImage && !renderedCoverInBlocks ? (
-          <StoryImage src={story.coverImage} alt={story.coverAlt ?? `${story.title} story cover`} orientation="landscape" />
+          <StoryImage src={story.coverImage} alt={story.coverAlt ?? `${story.title} story cover`} />
         ) : null}
 
         <div className="story-blocks">

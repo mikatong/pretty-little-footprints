@@ -1331,7 +1331,6 @@ export default function App() {
         placeCount={getPlaceCount(visiblePlaces)}
         countryCount={getCountryCount(visiblePlaces)}
         sinceYear={sinceYear}
-        selectedPlace={selectedVisiblePlace}
       />
 
       <section className="atlas-layout">
