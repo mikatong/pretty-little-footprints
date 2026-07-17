@@ -39,6 +39,13 @@ const flightSourceId = "journal-route-flights";
 const storyPreviewSourceId = "journal-story-previews";
 const debugMapQueryParam = "debugMap";
 const debugJourneyMap = false;
+const appMapSources = new Set([
+  pointSourceId,
+  yearRouteSourceId,
+  selectedRouteSourceId,
+  flightSourceId,
+  storyPreviewSourceId,
+]);
 const iconTypes: MapIconType[] = [
   "home",
   "city",
@@ -121,8 +128,8 @@ const getWorldZoom = () => {
   if (typeof window === "undefined") return 1.2;
   if (window.innerWidth < 560) return 0.62;
   if (window.innerWidth < 900) return 0.88;
-  if (window.innerWidth < 1300) return 1.02;
-  return 1.18;
+  if (window.innerWidth < 1300) return 1.08;
+  return 1.24;
 };
 
 const getStartYear = (place: Place) => place.year.match(/\d{4}/)?.[0] ?? place.startDate.slice(0, 4);
@@ -158,12 +165,12 @@ const getIconSvg = (iconType: MapIconType, accent: PlaceAccent, state: "lived" |
   const lived = state === "lived";
   const selected = state === "selected";
   const stroke = selected ? accent.dark : lived ? accent.dark : accent.primary;
-  const fill = selected ? accent.pale : lived ? accent.primary : accent.pale;
-  const bgFill = selected ? "#F9F2EA" : "#FFFDFC";
-  const opacity = lived ? "0.92" : "0.96";
-  const common = `fill="${fill}" stroke="${stroke}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"`;
-  const line = `fill="none" stroke="${stroke}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"`;
-  const bg = `<circle cx="24" cy="24" r="${selected ? 20 : 18}" fill="${bgFill}" stroke="${accent.pale}" stroke-width="1.5" opacity="${opacity}"/>`;
+  const fill = selected ? accent.pale : lived ? accent.pale : "#FFFDFC";
+  const bgFill = selected ? "#FBF5EC" : "rgba(255,253,249,0.78)";
+  const opacity = selected ? "0.98" : lived ? "0.82" : "0.76";
+  const common = `fill="${fill}" stroke="${stroke}" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"`;
+  const line = `fill="none" stroke="${stroke}" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"`;
+  const bg = `<circle cx="24" cy="24" r="${selected ? 18.5 : 16}" fill="${bgFill}" stroke="${accent.pale}" stroke-width="1" opacity="${selected ? "0.9" : "0.58"}"/>`;
   const shapes: Record<MapIconType, string> = {
     home: `<path ${common} d="M12 24 24 14l12 10v10H14V24z"/><path ${line} d="M21 34v-8h6v8"/>`,
     city: `<path ${common} d="M12 36V18h8v18M23 36V12h11v24"/><path ${line} d="M15 22h2M15 27h2M26 17h3M26 23h3M26 29h3"/>`,
@@ -199,7 +206,7 @@ const getIconSvg = (iconType: MapIconType, accent: PlaceAccent, state: "lived" |
 };
 
 const getFlightSvg = (color: string) => {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><path d="M7 19 31 7l-7 22-6-8-8 4 4-7z" fill="#FFFDFC" stroke="${color}" stroke-width="2" stroke-linejoin="round"/><path d="m18 21 13-14" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><path d="M7 19 31 7l-7 22-6-8-8 4 4-7z" fill="#FFFDFC" stroke="${color}" stroke-width="1.65" stroke-linejoin="round" opacity="0.86"/><path d="m18 21 13-14" fill="none" stroke="${color}" stroke-width="1.25" stroke-linecap="round" opacity="0.76"/></svg>`;
 };
 
 const loadSvgImage = (svg: string, size = 48) => {
@@ -502,14 +509,105 @@ const setCursor = (map: maplibregl.Map, cursor: string) => {
   map.getCanvas().style.cursor = cursor;
 };
 
-const hideUnrelatedMapLabels = (map: maplibregl.Map) => {
+const layerText = (layer: maplibregl.LayerSpecification) => {
+  const sourceLayer = "source-layer" in layer ? layer["source-layer"] : "";
+  const metadata = "metadata" in layer ? JSON.stringify(layer.metadata ?? {}) : "";
+  return `${layer.id} ${sourceLayer ?? ""} ${metadata}`.toLowerCase();
+};
+
+const shouldHideBaseMapSymbolLayer = (layer: maplibregl.LayerSpecification) => {
+  if (layer.type !== "symbol") return false;
+  if ("source" in layer && typeof layer.source === "string" && appMapSources.has(layer.source)) return false;
+  const text = layerText(layer);
+  const keep = /(label_country|country|marine|ocean|sea|water_name|continent)/.test(text);
+  const hide = /(label_city|label_town|label_village|label_state|label_other|settlement|locality|neighbour|suburb|hamlet|poi|transit|airport|aerodrome|transportation_name|rail|road|highway|motorway|trunk|primary|secondary|street|path|shield|state|province|admin-1)/.test(text);
+  return hide && !keep;
+};
+
+const setPaintIfChanged = (map: maplibregl.Map, layerId: string, property: string, value: unknown) => {
+  const current = map.getPaintProperty(layerId, property);
+  if (JSON.stringify(current) !== JSON.stringify(value)) {
+    map.setPaintProperty(layerId, property, value as never);
+  }
+};
+
+const softenBaseMapLayer = (map: maplibregl.Map, layer: maplibregl.LayerSpecification) => {
+  const text = layerText(layer);
+  try {
+    if (layer.type === "background") {
+      setPaintIfChanged(map, layer.id, "background-color", "#F8F3EA");
+      return;
+    }
+    if (layer.type === "fill") {
+      if (/(water|ocean|sea)/.test(text)) {
+        setPaintIfChanged(map, layer.id, "fill-color", "#F4EFE6");
+        setPaintIfChanged(map, layer.id, "fill-opacity", 0.92);
+      } else if (/(land|earth|country|admin|boundary|park|natural|landcover|landuse)/.test(text)) {
+        setPaintIfChanged(map, layer.id, "fill-color", "#FBF7EF");
+        setPaintIfChanged(map, layer.id, "fill-opacity", 0.84);
+      }
+      return;
+    }
+    if (layer.type === "line") {
+      if (/(boundary|admin|country)/.test(text)) {
+        setPaintIfChanged(map, layer.id, "line-color", "#DDD2C5");
+        setPaintIfChanged(map, layer.id, "line-opacity", 0.56);
+        setPaintIfChanged(map, layer.id, "line-width", 0.55);
+      } else if (/(road|rail|transport|ferry)/.test(text)) {
+        setPaintIfChanged(map, layer.id, "line-opacity", 0);
+      }
+      return;
+    }
+    if (layer.type === "symbol") {
+      if (/(country|continent)/.test(text)) {
+        setPaintIfChanged(map, layer.id, "text-color", "#9C938A");
+        setPaintIfChanged(map, layer.id, "text-halo-color", "#FBF7EF");
+        setPaintIfChanged(map, layer.id, "text-halo-width", 0.9);
+        setPaintIfChanged(map, layer.id, "text-opacity", 0.58);
+      } else if (/(marine|ocean|sea|water)/.test(text)) {
+        setPaintIfChanged(map, layer.id, "text-color", "#6E8AAA");
+        setPaintIfChanged(map, layer.id, "text-halo-color", "#F4EFE6");
+        setPaintIfChanged(map, layer.id, "text-halo-width", 0.7);
+        setPaintIfChanged(map, layer.id, "text-opacity", 0.58);
+      }
+    }
+  } catch {
+    // Third-party styles vary; ignore unsupported paint properties.
+  }
+};
+
+const styleBaseMap = (map: maplibregl.Map) => {
+  const hidden: string[] = [];
+  const inspected: string[] = [];
   map.getStyle().layers?.forEach((layer) => {
-    if (layer.type !== "symbol") return;
-    const id = layer.id.toLowerCase();
-    if (/(city|town|village|settlement|neighbourhood|poi|transit|airport|road)/.test(id)) {
-      map.setLayoutProperty(layer.id, "visibility", "none");
+    if (layer.type === "symbol" && (!("source" in layer) || typeof layer.source !== "string" || !appMapSources.has(layer.source))) {
+      inspected.push(`${layer.id}:${"source-layer" in layer ? layer["source-layer"] ?? "" : ""}`);
+    }
+    if (shouldHideBaseMapSymbolLayer(layer)) {
+      try {
+        if (map.getLayoutProperty(layer.id, "visibility") !== "none") {
+          map.setLayoutProperty(layer.id, "visibility", "none");
+        }
+        hidden.push(layer.id);
+      } catch {
+        return;
+      }
+      return;
+    }
+    if (!("source" in layer) || typeof layer.source !== "string" || !appMapSources.has(layer.source)) {
+      softenBaseMapLayer(map, layer);
     }
   });
+  if (typeof window !== "undefined") {
+    (window as unknown as {
+      __plmHiddenBaseMapLayers?: string[];
+      __plmInspectedBaseMapSymbolLayers?: string[];
+      __plmMap?: maplibregl.Map;
+    }).__plmHiddenBaseMapLayers = hidden.length || inspected.length ? hidden : (window as unknown as { __plmHiddenBaseMapLayers?: string[] }).__plmHiddenBaseMapLayers ?? [];
+    (window as unknown as { __plmInspectedBaseMapSymbolLayers?: string[] }).__plmInspectedBaseMapSymbolLayers = inspected.length
+      ? inspected
+      : (window as unknown as { __plmInspectedBaseMapSymbolLayers?: string[] }).__plmInspectedBaseMapSymbolLayers ?? [];
+  }
 };
 
 export function MapView({ places, selectedPlace, activeYear, meaningfulStories, onSelect }: MapViewProps) {
@@ -574,6 +672,14 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
       renderWorldCopies: false,
       attributionControl: false,
     });
+    if (import.meta.env.DEV) {
+      (window as unknown as { __plmMap?: maplibregl.Map }).__plmMap = map;
+    }
+    let styleCleanupTimer = 0;
+    const scheduleBaseMapStyle = () => {
+      window.clearTimeout(styleCleanupTimer);
+      styleCleanupTimer = window.setTimeout(() => styleBaseMap(map), 160);
+    };
     map.setMaxZoom(7.5);
     map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
@@ -598,7 +704,8 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
     }, "top-right");
     map.on("load", () => {
       void (async () => {
-        hideUnrelatedMapLabels(map);
+        styleBaseMap(map);
+        window.setTimeout(() => styleBaseMap(map), 250);
         await registerMapIcons(map);
         await registerStoryPreviewImages(map, latestMeaningfulStoriesRef.current);
         map.addSource(yearRouteSourceId, { type: "geojson", data: emptyFeatureCollection });
@@ -612,23 +719,23 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
           clusterMaxZoom: 4,
         });
         map.addSource(pointSourceId, { type: "geojson", data: emptyFeatureCollection });
-        map.addLayer({ id: "journal-year-route-casing", type: "line", source: yearRouteSourceId, paint: { "line-color": "#F6F0E8", "line-width": 5, "line-opacity": 0.76, "line-dasharray": [1.8, 2.4] } });
-        map.addLayer({ id: "journal-year-route", type: "line", source: yearRouteSourceId, paint: { "line-color": ["coalesce", ["get", "color"], "#8D624C"], "line-width": 2.8, "line-opacity": 0.86, "line-dasharray": [1.8, 2.4] } });
-        map.addLayer({ id: "journey-route-line-selected-casing", type: "line", source: selectedRouteSourceId, paint: { "line-color": "#F6F0E8", "line-width": 6, "line-opacity": 0.92, "line-dasharray": [1.8, 2.4] } });
-        map.addLayer({ id: "journey-route-line-selected", type: "line", source: selectedRouteSourceId, paint: { "line-color": ["coalesce", ["get", "color"], "#9B6657"], "line-width": 3.2, "line-opacity": 0.95, "line-dasharray": [1.8, 2.4] } });
-        map.addLayer({ id: "route-flight-icons", type: "symbol", source: flightSourceId, layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 0.58, 3, 0.76], "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true } });
-        map.addLayer({ id: "story-preview-clusters", type: "circle", source: storyPreviewSourceId, filter: ["has", "point_count"], paint: { "circle-radius": ["step", ["get", "point_count"], 18, 3, 22, 6, 27], "circle-color": "rgba(255,253,252,0.9)", "circle-stroke-color": "#8D624C", "circle-stroke-width": 1.4, "circle-opacity": ["interpolate", ["linear"], ["zoom"], 0.5, 0.85, 3.8, 0.3] } });
+        map.addLayer({ id: "journal-year-route-casing", type: "line", source: yearRouteSourceId, paint: { "line-color": "#FBF6EE", "line-width": 3.8, "line-opacity": 0.68, "line-dasharray": [1.4, 2.5] } });
+        map.addLayer({ id: "journal-year-route", type: "line", source: yearRouteSourceId, paint: { "line-color": ["coalesce", ["get", "color"], "#8D624C"], "line-width": 1.55, "line-opacity": 0.78, "line-dasharray": [1.4, 2.5] } });
+        map.addLayer({ id: "journey-route-line-selected-casing", type: "line", source: selectedRouteSourceId, paint: { "line-color": "#FBF6EE", "line-width": 4.2, "line-opacity": 0.82, "line-dasharray": [1.5, 2.6] } });
+        map.addLayer({ id: "journey-route-line-selected", type: "line", source: selectedRouteSourceId, paint: { "line-color": ["coalesce", ["get", "color"], "#9B6657"], "line-width": 1.8, "line-opacity": 0.86, "line-dasharray": [1.5, 2.6] } });
+        map.addLayer({ id: "route-flight-icons", type: "symbol", source: flightSourceId, layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 0.46, 3, 0.62], "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true } });
+        map.addLayer({ id: "story-preview-clusters", type: "circle", source: storyPreviewSourceId, filter: ["has", "point_count"], paint: { "circle-radius": ["step", ["get", "point_count"], 14, 3, 18, 6, 22], "circle-color": "rgba(255,253,249,0.78)", "circle-stroke-color": "#CDBFAF", "circle-stroke-width": 1, "circle-opacity": ["interpolate", ["linear"], ["zoom"], 0.5, 0.5, 3.8, 0.2] } });
         map.addLayer({ id: "story-preview-cluster-count", type: "symbol", source: storyPreviewSourceId, filter: ["has", "point_count"], layout: { "text-field": ["get", "point_count_abbreviated"], "text-size": 11, "text-allow-overlap": true }, paint: { "text-color": "#2C241F" } });
-        map.addLayer({ id: "visited-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "visited"], ["!=", ["get", "selected"], true], ["!=", ["get", "relatedToSelectedJourney"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1, 3, 1.28], "icon-allow-overlap": true } });
-        map.addLayer({ id: "lived-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "lived"], ["!=", ["get", "selected"], true], ["!=", ["get", "relatedToSelectedJourney"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.05, 3, 1.34], "icon-allow-overlap": true } });
-        map.addLayer({ id: "related-journey-halo", type: "circle", source: pointSourceId, filter: ["all", ["==", ["get", "relatedToSelectedJourney"], true], ["!=", ["get", "selected"], true]], paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 0.5, 18, 3, 22], "circle-color": "rgba(246, 240, 232, 0.72)", "circle-stroke-color": ["coalesce", ["get", "accentColor"], "#B47A67"], "circle-stroke-opacity": 0.22, "circle-stroke-width": 1.4 } });
-        map.addLayer({ id: "related-journey-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "relatedToSelectedJourney"], true], ["!=", ["get", "selected"], true]], layout: { "icon-image": ["get", "selectedIconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.32, 3, 1.45], "icon-allow-overlap": true } });
-        map.addLayer({ id: "selected-point-ring", type: "circle", source: pointSourceId, filter: ["==", ["get", "selected"], true], paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 0.5, 21, 3, 24], "circle-color": "rgba(246, 240, 232, 0.82)", "circle-stroke-color": ["coalesce", ["get", "accentColor"], "#7E5146"], "circle-stroke-opacity": 0.3, "circle-stroke-width": 1.6 } });
-        map.addLayer({ id: "selected-icon", type: "symbol", source: pointSourceId, filter: ["==", ["get", "selected"], true], layout: { "icon-image": ["get", "selectedIconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.52, 3, 1.62], "icon-allow-overlap": true } });
-        map.addLayer({ id: "story-preview-dots", type: "circle", source: storyPreviewSourceId, filter: ["!", ["has", "point_count"]], minzoom: 2.6, paint: { "circle-radius": ["case", ["==", ["get", "selected"], true], 12, ["==", ["get", "featured"], true], 9, 7], "circle-color": "rgba(255,253,252,0.88)", "circle-stroke-color": ["coalesce", ["get", "accentColor"], "#8D624C"], "circle-stroke-width": ["case", ["==", ["get", "selected"], true], 3, 1.8], "circle-opacity": ["interpolate", ["linear"], ["zoom"], 2.6, 0.72, 4.5, 0.95] } });
-        map.addLayer({ id: "story-preview-images", type: "symbol", source: storyPreviewSourceId, filter: ["all", ["!", ["has", "point_count"]], ["!=", ["get", "previewImage"], ""]], minzoom: 4.5, layout: { "icon-image": ["get", "previewImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 4.5, 0.42, 6.5, 0.58], "icon-offset": [0, -2.8], "icon-allow-overlap": false } });
-        map.addLayer({ id: "selected-place-labels", type: "symbol", source: pointSourceId, filter: ["any", ["==", ["get", "selected"], true], ["==", ["get", "relatedToSelectedJourney"], true]], layout: { "text-field": ["get", "title"], "text-size": 11, "text-offset": [1.7, 0], "text-anchor": "left", "text-allow-overlap": false }, paint: { "text-color": ["coalesce", ["get", "accentDark"], "#2c241f"], "text-halo-color": "#fffdfc", "text-halo-width": 1.2, "text-opacity": 0.92 } });
-        map.addLayer({ id: "story-preview-labels", type: "symbol", source: storyPreviewSourceId, filter: ["all", ["!", ["has", "point_count"]], ["any", ["==", ["get", "selected"], true], ["==", ["get", "featured"], true]]], minzoom: 3.2, layout: { "text-field": ["get", "title"], "text-size": ["interpolate", ["linear"], ["zoom"], 3.2, 10, 5.5, 12], "text-offset": [0, 1.45], "text-anchor": "top", "text-allow-overlap": false }, paint: { "text-color": ["coalesce", ["get", "accentDark"], "#2C241F"], "text-halo-color": "#FFFDFC", "text-halo-width": 1.2 } });
+        map.addLayer({ id: "visited-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "visited"], ["!=", ["get", "selected"], true], ["!=", ["get", "relatedToSelectedJourney"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 0.72, 3, 0.94], "icon-allow-overlap": false, "icon-ignore-placement": false } });
+        map.addLayer({ id: "lived-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "lived"], ["!=", ["get", "selected"], true], ["!=", ["get", "relatedToSelectedJourney"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 0.76, 3, 0.98], "icon-allow-overlap": false, "icon-ignore-placement": false } });
+        map.addLayer({ id: "related-journey-halo", type: "circle", source: pointSourceId, filter: ["all", ["==", ["get", "relatedToSelectedJourney"], true], ["!=", ["get", "selected"], true]], paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 0.5, 12, 3, 15], "circle-color": "rgba(251, 246, 238, 0.58)", "circle-stroke-color": ["coalesce", ["get", "accentColor"], "#B47A67"], "circle-stroke-opacity": 0.16, "circle-stroke-width": 0.9 } });
+        map.addLayer({ id: "related-journey-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "relatedToSelectedJourney"], true], ["!=", ["get", "selected"], true]], layout: { "icon-image": ["get", "selectedIconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.02, 3, 1.16], "icon-allow-overlap": false, "icon-ignore-placement": false } });
+        map.addLayer({ id: "selected-point-ring", type: "circle", source: pointSourceId, filter: ["==", ["get", "selected"], true], paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 0.5, 15, 3, 18], "circle-color": "rgba(251, 246, 238, 0.72)", "circle-stroke-color": ["coalesce", ["get", "accentColor"], "#7E5146"], "circle-stroke-opacity": 0.24, "circle-stroke-width": 1 } });
+        map.addLayer({ id: "selected-icon", type: "symbol", source: pointSourceId, filter: ["==", ["get", "selected"], true], layout: { "icon-image": ["get", "selectedIconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.18, 3, 1.3], "icon-allow-overlap": true } });
+        map.addLayer({ id: "story-preview-dots", type: "circle", source: storyPreviewSourceId, filter: ["!", ["has", "point_count"]], minzoom: 3.3, paint: { "circle-radius": ["case", ["==", ["get", "selected"], true], 8, ["==", ["get", "featured"], true], 6, 5], "circle-color": "rgba(255,253,249,0.78)", "circle-stroke-color": ["coalesce", ["get", "accentColor"], "#8D624C"], "circle-stroke-width": ["case", ["==", ["get", "selected"], true], 1.6, 1], "circle-opacity": ["interpolate", ["linear"], ["zoom"], 3.3, 0.42, 4.8, 0.78] } });
+        map.addLayer({ id: "story-preview-images", type: "symbol", source: storyPreviewSourceId, filter: ["all", ["!", ["has", "point_count"]], ["!=", ["get", "previewImage"], ""]], minzoom: 5.2, layout: { "icon-image": ["get", "previewImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 5.2, 0.34, 6.5, 0.48], "icon-offset": [0, -2.8], "icon-allow-overlap": false } });
+        map.addLayer({ id: "selected-place-labels", type: "symbol", source: pointSourceId, filter: ["any", ["==", ["get", "selected"], true], ["==", ["get", "relatedToSelectedJourney"], true]], layout: { "text-field": ["get", "title"], "text-size": 10.5, "text-offset": [1.42, 0], "text-anchor": "left", "text-allow-overlap": false }, paint: { "text-color": ["coalesce", ["get", "accentDark"], "#2c241f"], "text-halo-color": "#FBF7EF", "text-halo-width": 1, "text-opacity": 0.82 } });
+        map.addLayer({ id: "story-preview-labels", type: "symbol", source: storyPreviewSourceId, filter: ["all", ["!", ["has", "point_count"]], ["any", ["==", ["get", "selected"], true], ["==", ["get", "featured"], true]]], minzoom: 4.2, layout: { "text-field": ["get", "title"], "text-size": ["interpolate", ["linear"], ["zoom"], 4.2, 9, 5.8, 11], "text-offset": [0, 1.25], "text-anchor": "top", "text-allow-overlap": false }, paint: { "text-color": ["coalesce", ["get", "accentDark"], "#2C241F"], "text-halo-color": "#FBF7EF", "text-halo-width": 1, "text-opacity": 0.78 } });
         const clickableLayers = ["visited-icons", "lived-icons", "related-journey-icons", "selected-icon", "story-preview-images", "story-preview-dots", "story-preview-labels"];
         clickableLayers.forEach((layerId) => {
           map.on("click", layerId, (event) => {
@@ -656,9 +763,16 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
         setMapReady(true);
       })();
     });
-    map.on("styledata", () => applyLatestMapData(map));
+    map.on("styledata", () => {
+      scheduleBaseMapStyle();
+      applyLatestMapData(map);
+    });
     mapRef.current = map;
-    return () => { map.remove(); mapRef.current = null; };
+    return () => {
+      window.clearTimeout(styleCleanupTimer);
+      map.remove();
+      mapRef.current = null;
+    };
   }, [applyLatestMapData]);
 
   useEffect(() => {
