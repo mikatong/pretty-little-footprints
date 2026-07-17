@@ -2346,3 +2346,129 @@ img {
     padding: 10px;
   }
 }
+
+/* Final atlas homepage composition — intentionally kept at the end so the
+   presentation is stable across the legacy responsive rules above. */
+@media (min-width: 761px) {
+  .app-shell {
+    grid-template-rows: clamp(154px, 18.8vh, 188px) minmax(0, 1fr);
+    background: #fdfaf4;
+  }
+
+  .hero {
+    padding: clamp(24px, 2.25vw, 38px) clamp(50px, 5.3vw, 96px) 17px;
+    background: linear-gradient(105deg, rgba(255,253,249,.95), rgba(252,248,241,.88));
+  }
+
+  .hero-nav {
+    grid-template-columns: minmax(510px, 1.16fr) minmax(145px, .33fr) minmax(360px, .86fr);
+    grid-template-rows: minmax(82px, 1fr) auto;
+    column-gap: clamp(26px, 3vw, 58px);
+    row-gap: 7px;
+  }
+
+  .hero-nav .wordmark {
+    font-size: clamp(45px, 4.05vw, 76px);
+    font-style: italic;
+    font-weight: 300;
+    letter-spacing: .045em;
+    line-height: .82;
+    text-transform: none;
+  }
+
+  .hero-nav .wordmark::after { display: none; }
+
+  .hero-nav .wordmark small {
+    margin-top: 13px;
+    font-size: clamp(21px, 1.75vw, 31px);
+    line-height: .8;
+    transform: none;
+  }
+
+  .atlas-badge {
+    display: block;
+    align-self: start;
+    padding: 11px 0 8px;
+    border-bottom: 1px solid #d4b37b;
+    color: #403833;
+    font-family: "Iowan Old Style", Georgia, serif;
+    font-size: 11px;
+    letter-spacing: .23em;
+    line-height: 1;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .hero-links {
+    align-self: start;
+    justify-content: flex-end;
+    gap: clamp(24px, 3vw, 48px);
+    padding-top: 11px;
+  }
+
+  .hero-links a {
+    padding: 0 0 9px;
+    color: #4a403a;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .2em;
+  }
+
+  .hero-links a[href="#map"] { border-color: #bd8e47; color: #332d29; }
+  .hero-actions { display: none !important; }
+
+  .hero-stats {
+    grid-column: 1;
+    gap: 25px;
+    padding: 0 0 1px 10px;
+  }
+
+  .hero-stats div { gap: 10px; padding-right: 24px; }
+  .hero-stats dt { font-size: 9px; letter-spacing: .17em; }
+  .hero-stats dd { font-size: 18px; }
+
+  .atlas-layout { grid-template-columns: clamp(372px, 25.6vw, 430px) minmax(0, 1fr); }
+
+  .timeline-panel { padding: 20px 0 18px; background: rgba(255,253,249,.76); }
+  .timeline-panel .module-header, .timeline-panel .year-toggle, .timeline-panel .timeline-link { padding-right: 24px; padding-left: clamp(34px, 3vw, 72px); }
+  .timeline-panel .module-header { margin-bottom: 13px; }
+  .module-header, .timeline-month { color: #615850; font-size: 9px; letter-spacing: .2em; }
+  .year-toggle { padding-bottom: 14px; }
+  .year-toggle span { font-size: 28px; font-weight: 400; }
+  .timeline-items { padding-right: 18px; padding-left: clamp(34px, 3vw, 72px); }
+  .timeline-items::before { left: calc(clamp(34px, 3vw, 72px) + 21px); }
+  .timeline-item { grid-template-columns: 53px 15px 31px minmax(0, 1fr); min-height: 69px; gap: 9px; padding-bottom: 13px; }
+  .timeline-copy strong { font-size: 20px; }
+  .timeline-copy em { max-width: 190px; margin-top: 4px; font-size: 11px; }
+  .timeline-entry:has(.timeline-item.selected) { margin-right: 0; margin-left: 0; padding-right: 15px; padding-left: clamp(34px, 3vw, 72px); background: linear-gradient(90deg, rgba(140,110,151,.08), transparent 88%); }
+  .timeline-entry:has(.timeline-item.selected) .timeline-item { margin-left: calc(-1 * clamp(34px, 3vw, 72px)); padding-left: clamp(34px, 3vw, 72px); }
+  .timeline-inline-preview { grid-template-columns: minmax(0,1fr) 62px; margin-right: 0; margin-left: 86px; }
+
+  .map-section { grid-template-rows: minmax(0, 1fr) clamp(212px, 25vh, 258px); }
+  .map-view { filter: sepia(.12) saturate(.68) brightness(1.09) contrast(.88); }
+  .maplibregl-ctrl-top-right { top: 18px; right: 18px; }
+  .maplibregl-ctrl-group { border-color: rgba(189,174,156,.72) !important; border-radius: 8px !important; background: rgba(255,253,249,.70) !important; box-shadow: 0 6px 16px rgba(66,51,38,.05) !important; }
+  .maplibregl-ctrl-zoom-in, .maplibregl-ctrl-zoom-out { width: 31px !important; height: 31px !important; }
+  .maplibregl-ctrl-bottom-right { display: none; }
+
+  .story-panel { padding: 14px clamp(20px, 2.5vw, 42px) 17px 20px; background: rgba(255,253,249,.88); }
+  .atlas-story-rail { grid-template-columns: minmax(370px,.66fr) minmax(0,1.5fr); gap: 22px; }
+  .rail-featured-story { grid-template-columns: minmax(136px,.52fr) minmax(230px,1fr); gap: 16px; }
+  .rail-selected-copy { padding: 7px 0 6px 0; }
+  .rail-selected-copy strong { font-size: clamp(27px,2.2vw,37px); line-height: .9; }
+  .rail-selected-copy em { max-width: 205px; font-size: 12px; }
+  .rail-selected-image { border-radius: 12px; }
+  .rail-selected-image img { object-fit: cover; }
+  .rail-story-cards { gap: 12px; }
+  .rail-story-card { grid-template-rows: minmax(118px,1fr) auto auto; flex-basis: clamp(138px,11.2vw,184px); border-radius: 10px; }
+  .rail-story-card strong { font-size: 18px; }
+}
+
+@media (min-width: 761px) and (max-width: 1280px) {
+  .hero { padding-right: 42px; padding-left: 42px; }
+  .hero-nav { grid-template-columns: minmax(430px,1fr) 135px minmax(340px,.82fr); column-gap: 22px; }
+  .hero-nav .wordmark { font-size: clamp(43px,4.45vw,57px); }
+  .atlas-layout { grid-template-columns: 340px minmax(0,1fr); }
+  .timeline-panel .module-header, .timeline-panel .year-toggle, .timeline-panel .timeline-link, .timeline-items { padding-left: 32px; }
+  .timeline-items::before { left: 53px; }
+}

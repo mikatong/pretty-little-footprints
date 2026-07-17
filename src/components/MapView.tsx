@@ -272,6 +272,33 @@ const getChronologicalPlacesForYear = (places: Place[], activeYear: string) => {
     .map(({ place }) => place);
 };
 
+// Chronology made the long-haul lines crisscross one another. Starting with the
+// earliest entry still gives each year a meaningful anchor, then the map follows
+// the nearest unvisited location for a calmer, more legible atlas composition.
+const getNearestNeighbourPlacesForYear = (places: Place[], activeYear: string) => {
+  const chronological = getChronologicalPlacesForYear(places, activeYear);
+  if (chronological.length < 3) return chronological;
+  const ordered = [chronological[0]];
+  const remaining = chronological.slice(1);
+  while (remaining.length > 0) {
+    const from = getPrimaryPoint(ordered[ordered.length - 1]);
+    if (!from) break;
+    let closestIndex = 0;
+    let closestDistance = Number.POSITIVE_INFINITY;
+    remaining.forEach((place, index) => {
+      const point = getPrimaryPoint(place);
+      if (!point) return;
+      const distance = getDistanceKm(from.coordinates, point.coordinates);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestIndex = index;
+      }
+    });
+    ordered.push(remaining.splice(closestIndex, 1)[0]);
+  }
+  return ordered;
+};
+
 const toRadians = (degrees: number) => degrees * Math.PI / 180;
 const toDegrees = (radians: number) => radians * 180 / Math.PI;
 
@@ -355,7 +382,7 @@ const getRouteCoordinatesForPlace = (selectedPlace: Place, places: Place[]) => {
   const hasExplicitRoute = Boolean(selectedPlace.mapPoints && selectedCoordinates.length >= 2);
   return hasExplicitRoute
     ? selectedCoordinates
-    : getChronologicalPlacesForYear(places, getStartYear(selectedPlace))
+    : getNearestNeighbourPlacesForYear(places, getStartYear(selectedPlace))
       .map(getPrimaryPoint)
       .filter((point): point is ValidPoint => Boolean(point))
       .map((point) => point.coordinates);
@@ -383,7 +410,7 @@ const getYearRouteFeatureCollection = (places: Place[]) => {
   return {
     type: "FeatureCollection" as const,
     features: years.flatMap((year) => {
-      const coordinates = getChronologicalPlacesForYear(places, year)
+      const coordinates = getNearestNeighbourPlacesForYear(places, year)
         .map(getPrimaryPoint)
         .filter((point): point is ValidPoint => Boolean(point))
         .map((point) => point.coordinates);
@@ -400,7 +427,7 @@ const getYearRouteFeatureCollection = (places: Place[]) => {
 const getAllFlightFeatureCollection = (places: Place[]) => ({
   type: "FeatureCollection" as const,
   features: [...new Set(places.map(getStartYear))].flatMap((year) => {
-    const coordinates = getChronologicalPlacesForYear(places, year)
+    const coordinates = getNearestNeighbourPlacesForYear(places, year)
       .map(getPrimaryPoint)
       .filter((point): point is ValidPoint => Boolean(point))
       .map((point) => point.coordinates);
@@ -573,10 +600,6 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
   const mapRef = useRef<maplibregl.Map | null>(null);
   const lastCameraSelectionRef = useRef<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(true);
-  const selectedStoryImage = selectedPlace.story?.previewImage ?? selectedPlace.story?.coverImage;
-  const selectedPreviewText = selectedPlace.story?.previewSummary || selectedPlace.story?.dek || selectedPlace.note;
-  const selectedAccent = getPlaceAccent(selectedPlace);
   const pointData = useMemo(() => getPointFeatureCollection(places, selectedPlace), [places, selectedPlace]);
   const activeRouteData = useMemo(() => buildRouteFeatureCollection(selectedPlace.id, places), [places, selectedPlace.id]);
   const yearRouteData = useMemo(() => getYearRouteFeatureCollection(places), [places]);
@@ -641,25 +664,6 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
     map.setMaxZoom(7.5);
     map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-    map.addControl({
-      onAdd: () => {
-        const container = document.createElement("div");
-        container.className = "maplibregl-ctrl maplibregl-ctrl-group";
-        const button = document.createElement("button");
-        button.className = "map-home-control";
-        button.type = "button";
-        button.setAttribute("aria-label", "Return to selected place");
-        button.title = "Return to selected place";
-        button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3.5 10 8.5-7 8.5 7v10h-6v-6h-5v6h-6z"/></svg>';
-        button.addEventListener("click", () => {
-          applyLatestMapData(map);
-          fitRouteOrPoint(map, latestSelectedPlaceRef.current, latestPlacesRef.current, 540);
-        });
-        container.append(button);
-        return container;
-      },
-      onRemove: () => undefined,
-    }, "top-right");
     map.on("load", () => {
       void (async () => {
         styleBaseMap(map);
@@ -718,6 +722,8 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
         map.on("mouseenter", "story-preview-clusters", () => setCursor(map, "pointer"));
         map.on("mouseleave", "story-preview-clusters", () => setCursor(map, ""));
         applyLatestMapData(map);
+        // Preserve the opening world-atlas framing; later selections still focus.
+        lastCameraSelectionRef.current = latestSelectedPlaceRef.current.id;
         setMapReady(true);
       })();
     });
@@ -768,36 +774,9 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
     fitRouteOrPoint(map, selectedPlace, places, 650);
   }, [applyLatestMapData, selectedPlace, places, mapReady]);
 
-  useEffect(() => {
-    setPreviewOpen(true);
-  }, [selectedPlace.id]);
-
   return (
     <div className="map-shell">
       <div ref={containerRef} className="map-view" aria-label="Interactive travel footprint map" />
-      {previewOpen && hasMeaningfulStoryContent(selectedPlace) && selectedPlace.story ? (
-        <article
-          className="map-selected-preview map-selected-preview-overlay"
-          style={{ "--place-accent": selectedAccent.primary, "--place-accent-pale": selectedAccent.pale } as Record<string, string>}
-        >
-          <button className="map-selected-preview-close" type="button" aria-label="Close story preview" onClick={() => setPreviewOpen(false)}>×</button>
-          {selectedStoryImage ? <img src={selectedStoryImage} alt={`${selectedPlace.name} story preview`} loading="lazy" decoding="async" /> : null}
-          <div>
-            <small>{selectedPlace.dateLabel} · {selectedPlace.country}</small>
-            <strong>{selectedPlace.story.title ?? selectedPlace.name}</strong>
-            {selectedPreviewText ? <p>{selectedPreviewText}</p> : null}
-            <a href={`/stories/${selectedPlace.story.slug}`}>Read story →</a>
-          </div>
-        </article>
-      ) : null}
-      <div className="map-compass" aria-hidden="true">
-        <span>N</span>
-      </div>
-      <div className="map-route-legend" aria-label="Route years">
-        {["2026", "2025", "2024", "2023", "2022 or earlier"].map((year) => (
-          <span key={year} className={`route-${year.slice(0, 4)}`}><i />{year}</span>
-        ))}
-      </div>
     </div>
   );
 }
