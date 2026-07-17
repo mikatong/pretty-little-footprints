@@ -525,7 +525,9 @@ const softenBaseMapLayer = (map: maplibregl.Map, layer: maplibregl.LayerSpecific
   const text = layerText(layer);
   try {
     if (layer.type === "background") {
-      setPaintIfChanged(map, layer.id, "background-color", "#FFFDF8");
+      // In the real OpenFreeMap Positron style, the background is the land
+      // canvas; water is drawn above it by the separate `water` fill layer.
+      setPaintIfChanged(map, layer.id, "background-color", "#F1E7D8");
       return;
     }
     if (layer.type === "fill") {
@@ -550,7 +552,7 @@ const softenBaseMapLayer = (map: maplibregl.Map, layer: maplibregl.LayerSpecific
     }
     if (layer.type === "symbol") {
       if (/(marine|ocean|sea|water)/.test(text)) {
-        setPaintIfChanged(map, layer.id, "text-color", "#716A61");
+        setPaintIfChanged(map, layer.id, "text-color", "#4C7DA7");
         setPaintIfChanged(map, layer.id, "text-halo-color", "#FFFDF8");
         setPaintIfChanged(map, layer.id, "text-halo-width", 0.8);
         setPaintIfChanged(map, layer.id, "text-opacity", 0.72);
@@ -559,6 +561,20 @@ const softenBaseMapLayer = (map: maplibregl.Map, layer: maplibregl.LayerSpecific
   } catch {
     // Third-party styles vary; ignore unsupported paint properties.
   }
+};
+
+const runtimeMapDiagnostics = (map: maplibregl.Map) => {
+  const layers = map.getStyle().layers ?? [];
+  const layerIds = new Set(layers.map((layer) => layer.id));
+  const requiredLayers = ["journal-year-route", "route-flight-icons", "visited-place-labels", "visited-country-labels"];
+  const oceanLayers = layers.filter((layer) => layer.type === "symbol" && /(marine|ocean|sea|water_name)/.test(layerText(layer)));
+  const landWaterLayers = layers.filter((layer) => layer.type === "background" || (layer.type === "fill" && /(water|land|earth|landcover|landuse)/.test(layerText(layer))));
+  return {
+    ready: requiredLayers.every((id) => layerIds.has(id)) && oceanLayers.length > 0 && landWaterLayers.length > 0,
+    missingLayers: requiredLayers.filter((id) => !layerIds.has(id)),
+    oceanLayerIds: oceanLayers.map((layer) => layer.id),
+    landWaterLayerIds: landWaterLayers.map((layer) => layer.id),
+  };
 };
 
 const styleBaseMap = (map: maplibregl.Map) => {
@@ -662,9 +678,19 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
       (window as unknown as { __plmMap?: maplibregl.Map }).__plmMap = map;
     }
     let styleCleanupTimer = 0;
+    const publishMapDiagnostics = () => {
+      const diagnostics = runtimeMapDiagnostics(map);
+      containerRef.current?.setAttribute("data-map-diagnostics", diagnostics.ready ? "ready" : `missing:${diagnostics.missingLayers.join(",")}`);
+      if (import.meta.env.DEV) {
+        (window as unknown as { __plmMapDiagnostics?: ReturnType<typeof runtimeMapDiagnostics> }).__plmMapDiagnostics = diagnostics;
+      }
+    };
     const scheduleBaseMapStyle = () => {
       window.clearTimeout(styleCleanupTimer);
-      styleCleanupTimer = window.setTimeout(() => styleBaseMap(map), 160);
+      styleCleanupTimer = window.setTimeout(() => {
+        styleBaseMap(map);
+        publishMapDiagnostics();
+      }, 160);
     };
     map.setMaxZoom(7.5);
     map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
@@ -730,6 +756,7 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
         map.on("mouseenter", "story-preview-clusters", () => setCursor(map, "pointer"));
         map.on("mouseleave", "story-preview-clusters", () => setCursor(map, ""));
         applyLatestMapData(map);
+        publishMapDiagnostics();
         // Preserve the opening world-atlas framing; later selections still focus.
         lastCameraSelectionRef.current = latestSelectedPlaceRef.current.id;
         setMapReady(true);
