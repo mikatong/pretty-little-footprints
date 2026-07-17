@@ -67,10 +67,10 @@ img {
 }
 
 .hero-nav {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(390px, 1.35fr) auto minmax(320px, 1fr);
   height: 100%;
   align-items: center;
-  justify-content: space-between;
   gap: 24px;
 }
 
@@ -100,6 +100,7 @@ img {
 
 .hero-nav div {
   display: flex;
+  justify-content: flex-end;
   gap: clamp(22px, 3.4vw, 42px);
 }
 
@@ -116,15 +117,6 @@ img {
 
 .hero-nav a {
   text-decoration: none;
-}
-
-.hero-content {
-  position: absolute;
-  left: clamp(240px, 26vw, 370px);
-  top: 0;
-  height: 100%;
-  display: flex;
-  align-items: center;
 }
 
 .hero-stats {
@@ -630,28 +622,29 @@ img {
 }
 
 .map-home-control {
-  position: absolute;
-  z-index: 3;
-  top: 112px;
-  right: 22px;
-  min-width: 56px;
-  min-height: 34px;
-  padding: 8px 11px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
+  display: grid;
+  width: 29px;
+  height: 29px;
+  place-items: center;
+  padding: 0;
+  border: 0;
   color: var(--text);
-  background: rgba(255, 253, 252, 0.9);
-  box-shadow: 0 8px 20px rgba(44, 36, 31, 0.08);
+  background: transparent;
   cursor: pointer;
-  font-family: "IBM Plex Sans", Inter, sans-serif;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
 }
 
 .map-home-control:hover {
   background: var(--surface);
+}
+
+.map-home-control svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .maplibregl-ctrl-bottom-right {
@@ -1384,9 +1377,8 @@ img {
     display: none;
   }
 
-  .hero-content {
-    position: static;
-    height: auto;
+  .hero-nav {
+    display: flex;
   }
 
   .hero-stats {

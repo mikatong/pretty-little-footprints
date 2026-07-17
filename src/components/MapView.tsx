@@ -415,32 +415,35 @@ const getYearRouteFeatureCollection = (places: Place[], activeYear: string, sele
   };
 };
 
-const getSelectedRouteFeatureCollection = (selectedPlace: Place) => {
-  const routeCoordinates = getValidPoints(selectedPlace).map((point) => point.coordinates);
-  if (!selectedPlace.mapPoints || routeCoordinates.length < 2) return emptyFeatureCollection;
+// This is the sole route builder. It derives every active route from the canonical
+// selected id, so a popup or a previous map selection can never influence it.
+const buildRouteFeatureCollection = (selectedPlaceId: string, places: Place[]) => {
+  const selectedPlace = places.find((place) => place.id === selectedPlaceId);
+  if (!selectedPlace) return { route: emptyFeatureCollection, flights: emptyFeatureCollection };
+  const selectedCoordinates = getValidPoints(selectedPlace).map((point) => point.coordinates);
+  const hasExplicitRoute = Boolean(selectedPlace.mapPoints && selectedCoordinates.length >= 2);
+  const routeCoordinates = hasExplicitRoute
+    ? selectedCoordinates
+    : getChronologicalPlacesForYear(places, getStartYear(selectedPlace))
+      .map(getPrimaryPoint)
+      .filter((point): point is ValidPoint => Boolean(point))
+      .map((point) => point.coordinates);
+  if (routeCoordinates.length < 2) return { route: emptyFeatureCollection, flights: emptyFeatureCollection };
+  const year = getStartYear(selectedPlace);
+  const color = yearRouteColors[year] ?? "#8D624C";
   return {
-    type: "FeatureCollection",
-    features: [{
-      type: "Feature",
-      properties: { id: selectedPlace.id, color: getPlaceAccent(selectedPlace).primary },
-      geometry: { type: "LineString", coordinates: getCurvedRouteCoordinates(routeCoordinates) },
-    }],
-  };
-};
-
-const getFlightFeatureCollection = (places: Place[], activeYear: string, selectedPlace: Place) => {
-  const selectedRouteCoordinates = getValidPoints(selectedPlace).map((point) => point.coordinates);
-  const selectedFeatures = selectedPlace.mapPoints && selectedRouteCoordinates.length >= 2
-    ? getFlightFeatures(selectedRouteCoordinates, getPlaceAccent(selectedPlace).key)
-    : [];
-  const yearCoordinates = selectedFeatures.length > 0 ? [] : getChronologicalPlacesForYear(places, activeYear)
-    .map(getPrimaryPoint)
-    .filter((point): point is ValidPoint => Boolean(point))
-    .map((point) => point.coordinates);
-  const yearFeatures = yearCoordinates.length >= 2 ? getFlightFeatures(yearCoordinates, activeYear) : [];
-  return {
-    type: "FeatureCollection",
-    features: [...yearFeatures, ...selectedFeatures],
+    route: {
+      type: "FeatureCollection" as const,
+      features: [{
+        type: "Feature",
+        properties: { id: selectedPlaceId, year, color },
+        geometry: { type: "LineString", coordinates: getCurvedRouteCoordinates(routeCoordinates) },
+      }],
+    },
+    flights: {
+      type: "FeatureCollection" as const,
+      features: getFlightFeatures(routeCoordinates, year),
+    },
   };
 };
 
@@ -521,10 +524,44 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
   const [mapReady, setMapReady] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(true);
   const pointData = useMemo(() => getPointFeatureCollection(places, selectedPlace), [places, selectedPlace]);
-  const yearRouteData = useMemo(() => getYearRouteFeatureCollection(places, activeYear, selectedPlace), [places, activeYear, selectedPlace]);
-  const selectedRouteData = useMemo(() => getSelectedRouteFeatureCollection(selectedPlace), [selectedPlace]);
-  const flightData = useMemo(() => getFlightFeatureCollection(places, activeYear, selectedPlace), [places, activeYear, selectedPlace]);
+  const activeRouteData = useMemo(() => buildRouteFeatureCollection(selectedPlace.id, places), [places, selectedPlace.id]);
+  const yearRouteData = emptyFeatureCollection;
+  const selectedRouteData = activeRouteData.route;
+  const flightData = activeRouteData.flights;
   const storyPreviewData = useMemo(() => getStoryPreviewFeatureCollection(meaningfulStories, selectedPlace), [meaningfulStories, selectedPlace]);
+  const latestSelectedPlaceRef = useRef(selectedPlace);
+  const latestPlacesRef = useRef(places);
+  const latestMeaningfulStoriesRef = useRef(meaningfulStories);
+  const latestOnSelectRef = useRef(onSelect);
+  const latestPointDataRef = useRef(pointData);
+  const latestYearRouteDataRef = useRef(yearRouteData);
+  const latestSelectedRouteDataRef = useRef(selectedRouteData);
+  const latestFlightDataRef = useRef(flightData);
+  const latestStoryPreviewDataRef = useRef(storyPreviewData);
+  latestSelectedPlaceRef.current = selectedPlace;
+  latestPlacesRef.current = places;
+  latestMeaningfulStoriesRef.current = meaningfulStories;
+  latestOnSelectRef.current = onSelect;
+  latestPointDataRef.current = pointData;
+  latestYearRouteDataRef.current = yearRouteData;
+  latestSelectedRouteDataRef.current = selectedRouteData;
+  latestFlightDataRef.current = flightData;
+  latestStoryPreviewDataRef.current = storyPreviewData;
+
+  const applyLatestMapData = useCallback((map: maplibregl.Map) => {
+    const pointSource = map.getSource(pointSourceId) as maplibregl.GeoJSONSource | undefined;
+    const yearRouteSource = map.getSource(yearRouteSourceId) as maplibregl.GeoJSONSource | undefined;
+    const selectedRouteSource = map.getSource(selectedRouteSourceId) as maplibregl.GeoJSONSource | undefined;
+    const flightSource = map.getSource(flightSourceId) as maplibregl.GeoJSONSource | undefined;
+    const storyPreviewSource = map.getSource(storyPreviewSourceId) as maplibregl.GeoJSONSource | undefined;
+    if (!pointSource || !yearRouteSource || !selectedRouteSource || !flightSource || !storyPreviewSource) return false;
+    pointSource.setData(latestPointDataRef.current as never);
+    yearRouteSource.setData(latestYearRouteDataRef.current as never);
+    selectedRouteSource.setData(latestSelectedRouteDataRef.current as never);
+    flightSource.setData(latestFlightDataRef.current as never);
+    storyPreviewSource.setData(latestStoryPreviewDataRef.current as never);
+    return true;
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -542,11 +579,40 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
     map.setMaxZoom(7.5);
     map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    map.addControl({
+      onAdd: () => {
+        const container = document.createElement("div");
+        container.className = "maplibregl-ctrl maplibregl-ctrl-group";
+        const button = document.createElement("button");
+        button.className = "map-home-control";
+        button.type = "button";
+        button.setAttribute("aria-label", "Return to selected place");
+        button.title = "Return to selected place";
+        button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3.5 10 8.5-7 8.5 7v10h-6v-6h-5v6h-6z"/></svg>';
+        button.addEventListener("click", () => {
+          const currentPlace = latestSelectedPlaceRef.current;
+          setPreviewOpen(false);
+          applyLatestMapData(map);
+          const routePoints = getValidPoints(currentPlace);
+          if (routePoints.length > 1) {
+            const bounds = new maplibregl.LngLatBounds();
+            routePoints.forEach((point) => bounds.extend(point.coordinates));
+            map.fitBounds(bounds, { padding: window.innerWidth < 700 ? 46 : 72, maxZoom: 3.4, duration: 520, essential: true });
+            return;
+          }
+          const point = getPrimaryPoint(currentPlace);
+          if (point) map.easeTo({ center: point.coordinates, zoom: Math.max(map.getZoom(), 2.2), duration: 520, essential: true });
+        });
+        container.append(button);
+        return container;
+      },
+      onRemove: () => undefined,
+    }, "top-right");
     map.on("load", () => {
       void (async () => {
         hideUnrelatedMapLabels(map);
         await registerMapIcons(map);
-        await registerStoryPreviewImages(map, meaningfulStories);
+        await registerStoryPreviewImages(map, latestMeaningfulStoriesRef.current);
         map.addSource(yearRouteSourceId, { type: "geojson", data: emptyFeatureCollection });
         map.addSource(selectedRouteSourceId, { type: "geojson", data: emptyFeatureCollection });
         map.addSource(flightSourceId, { type: "geojson", data: emptyFeatureCollection });
@@ -579,8 +645,8 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
         clickableLayers.forEach((layerId) => {
           map.on("click", layerId, (event) => {
             const entryId = event.features?.[0]?.properties?.entryId;
-            const selectedEntry = places.find((place) => place.id === entryId);
-            if (selectedEntry) onSelect(selectedEntry);
+            const selectedEntry = latestPlacesRef.current.find((place) => place.id === entryId);
+            if (selectedEntry) latestOnSelectRef.current(selectedEntry);
           });
           map.on("mouseenter", layerId, () => setCursor(map, "pointer"));
           map.on("mouseleave", layerId, () => setCursor(map, ""));
@@ -598,12 +664,14 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
         });
         map.on("mouseenter", "story-preview-clusters", () => setCursor(map, "pointer"));
         map.on("mouseleave", "story-preview-clusters", () => setCursor(map, ""));
+        applyLatestMapData(map);
         setMapReady(true);
       })();
     });
+    map.on("styledata", () => applyLatestMapData(map));
     mapRef.current = map;
     return () => { map.remove(); mapRef.current = null; };
-  }, [onSelect, places]);
+  }, [applyLatestMapData]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -614,31 +682,22 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
-    const pointSource = map.getSource(pointSourceId) as maplibregl.GeoJSONSource | undefined;
-    const yearRouteSource = map.getSource(yearRouteSourceId) as maplibregl.GeoJSONSource | undefined;
-    const selectedRouteSource = map.getSource(selectedRouteSourceId) as maplibregl.GeoJSONSource | undefined;
-    const flightSource = map.getSource(flightSourceId) as maplibregl.GeoJSONSource | undefined;
-    const storyPreviewSource = map.getSource(storyPreviewSourceId) as maplibregl.GeoJSONSource | undefined;
-    pointSource?.setData(pointData as never);
-    yearRouteSource?.setData(yearRouteData as never);
-    selectedRouteSource?.setData(selectedRouteData as never);
-    flightSource?.setData(flightData as never);
-    storyPreviewSource?.setData(storyPreviewData as never);
+    applyLatestMapData(map);
     if (import.meta.env.DEV && shouldDebugMap()) {
       console.info("Journal Map debug", {
         selectedEntryId: selectedPlace.id,
         activeYear,
         pointFeatureCount: pointData.features.length,
-        yearRouteCoordinateCount: yearRouteData.features[0]?.geometry.coordinates.length ?? 0,
+        yearRouteCoordinateCount: 0,
         selectedJourneyCoordinateCount: selectedRouteData.features[0]?.geometry.coordinates.length ?? 0,
         flightFeatureCount: flightData.features.length,
         storyPreviewFeatureCount: storyPreviewData.features.length,
         selectedJourneyCoordinates: selectedRouteData.features[0]?.geometry.coordinates ?? [],
-        routeSources: { year: Boolean(yearRouteSource), selected: Boolean(selectedRouteSource), flights: Boolean(flightSource) },
+        routeSources: { year: Boolean(map.getSource(yearRouteSourceId)), selected: Boolean(map.getSource(selectedRouteSourceId)), flights: Boolean(map.getSource(flightSourceId)) },
         iconLayers: ["visited-icons", "lived-icons", "related-journey-icons", "selected-icon"].every((id) => Boolean(map.getLayer(id))),
       });
     }
-  }, [mapReady, pointData, yearRouteData, selectedRouteData, flightData, storyPreviewData, selectedPlace.id, activeYear]);
+  }, [applyLatestMapData, mapReady, pointData, yearRouteData, selectedRouteData, flightData, storyPreviewData, selectedPlace.id, activeYear]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -657,21 +716,6 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
       map.easeTo({ center: primaryPoint.coordinates, zoom: map.getZoom(), duration: 520, easing: (time) => 1 - Math.pow(1 - time, 3), essential: true });
     }
   }, [selectedPlace, mapReady]);
-
-  const returnToSelectedPlace = useCallback(() => {
-    const map = mapRef.current;
-    if (!map || !mapReady) return;
-    setPreviewOpen(false);
-    const routePoints = getValidPoints(selectedPlace);
-    if (routePoints.length > 1) {
-      const bounds = new maplibregl.LngLatBounds();
-      routePoints.forEach((point) => bounds.extend(point.coordinates));
-      map.fitBounds(bounds, { padding: window.innerWidth < 700 ? 46 : 72, maxZoom: 3.4, duration: 520, essential: true });
-      return;
-    }
-    const point = getPrimaryPoint(selectedPlace);
-    if (point) map.easeTo({ center: point.coordinates, zoom: Math.max(map.getZoom(), 2.2), duration: 520, essential: true });
-  }, [mapReady, selectedPlace]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -700,9 +744,6 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
   return (
     <div className="map-shell">
       <div ref={containerRef} className="map-view" aria-label="Interactive travel footprint map" />
-      <button className="map-home-control" type="button" onClick={returnToSelectedPlace} aria-label={`Return to ${selectedPlace.name}`}>
-        Home
-      </button>
     </div>
   );
 }
