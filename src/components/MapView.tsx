@@ -35,7 +35,6 @@ const worldBounds: [[number, number], [number, number]] = [
 const pointSourceId = "map-points";
 const yearRouteSourceId = "journal-year-route";
 const selectedRouteSourceId = "journey-route-selected";
-const flightSourceId = "journal-route-flights";
 const storyPreviewSourceId = "journal-story-previews";
 const debugMapQueryParam = "debugMap";
 const debugJourneyMap = false;
@@ -43,7 +42,6 @@ const appMapSources = new Set([
   pointSourceId,
   yearRouteSourceId,
   selectedRouteSourceId,
-  flightSourceId,
   storyPreviewSourceId,
 ]);
 const emptyFeatureCollection = {
@@ -100,19 +98,19 @@ const iconImageName = (iconType: MapIconType, accentKey: string, state: "lived" 
   return `plm-${iconType}-${accentKey}-${state}`;
 };
 
-const flightIconName = (colorKey: string) => `plm-flight-${colorKey}`;
 const storyPreviewImageName = (placeId: string) => `plm-story-preview-${placeId}`;
 
 const getIconSvg = (iconType: MapIconType, accent: PlaceAccent, state: "lived" | "visited" | "selected") => {
   const lived = state === "lived";
   const selected = state === "selected";
   const stroke = selected ? accent.dark : lived ? accent.dark : accent.primary;
-  const fill = selected ? accent.pale : lived ? accent.pale : "#FFFDFC";
-  const bgFill = selected ? "#FBF5EC" : "rgba(255,253,249,0.78)";
-  const opacity = selected ? "0.98" : lived ? "0.82" : "0.76";
-  const common = `fill="${fill}" stroke="${stroke}" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"`;
-  const line = `fill="none" stroke="${stroke}" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"`;
-  const bg = `<circle cx="24" cy="24" r="${selected ? 18.5 : 16}" fill="${bgFill}" stroke="${accent.pale}" stroke-width="1" opacity="${selected ? "0.9" : "0.58"}"/>`;
+  const fill = selected || lived ? accent.pale : "#FFFDFC";
+  const opacity = selected ? "1" : "0.93";
+  const common = `fill="${fill}" stroke="${stroke}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"`;
+  const line = `fill="none" stroke="${stroke}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"`;
+  // Keep the selected location gently anchored, but leave regular destinations
+  // as clean editorial illustrations rather than icon-in-a-bubble badges.
+  const bg = selected ? `<circle cx="24" cy="24" r="18" fill="#FBF6ED" stroke="${accent.pale}" stroke-width="1" opacity="0.9"/>` : "";
   const shapes: Record<MapIconType, string> = {
     home: `<path ${common} d="M12 24 24 14l12 10v10H14V24z"/><path ${line} d="M21 34v-8h6v8"/>`,
     city: `<path ${common} d="M12 36V18h8v18M23 36V12h11v24"/><path ${line} d="M15 22h2M15 27h2M26 17h3M26 23h3M26 29h3"/>`,
@@ -147,10 +145,6 @@ const getIconSvg = (iconType: MapIconType, accent: PlaceAccent, state: "lived" |
   return `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">${bg}${shapes[iconType]}</svg>`;
 };
 
-const getFlightSvg = (color: string) => {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><path d="M7 19 31 7l-7 22-6-8-8 4 4-7z" fill="#FFFDFC" stroke="${color}" stroke-width="1.65" stroke-linejoin="round" opacity="0.86"/><path d="m18 21 13-14" fill="none" stroke="${color}" stroke-width="1.25" stroke-linecap="round" opacity="0.76"/></svg>`;
-};
-
 const loadSvgImage = (svg: string, size = 48) => {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image(size, size);
@@ -181,13 +175,6 @@ const registerMapIcons = async (map: maplibregl.Map, places: Place[]) => {
       map.addImage(name, image, { pixelRatio: 2 });
     })
   ));
-  const usedRouteColors = [...new Set(places.map(getStartYear))].map((year) => [year, yearRouteColors[year] ?? "#8D624C"] as const);
-  await Promise.all(usedRouteColors.map(async ([key, color]) => {
-    const name = flightIconName(key);
-    if (map.hasImage(name)) return;
-    const image = await loadSvgImage(getFlightSvg(color), 36);
-    map.addImage(name, image, { pixelRatio: 2 });
-  }));
 };
 
 const registerStoryPreviewImages = async (map: maplibregl.Map, storyPlaces: Place[]) => {
@@ -300,7 +287,6 @@ const getNearestNeighbourPlacesForYear = (places: Place[], activeYear: string) =
 };
 
 const toRadians = (degrees: number) => degrees * Math.PI / 180;
-const toDegrees = (radians: number) => radians * 180 / Math.PI;
 
 const getDistanceKm = (from: [number, number], to: [number, number]) => {
   const earthRadiusKm = 6371;
@@ -310,15 +296,6 @@ const getDistanceKm = (from: [number, number], to: [number, number]) => {
   const lat2 = toRadians(to[1]);
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
   return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-};
-
-const getBearing = (from: [number, number], to: [number, number]) => {
-  const lat1 = toRadians(from[1]);
-  const lat2 = toRadians(to[1]);
-  const dLng = toRadians(to[0] - from[0]);
-  const y = Math.sin(dLng) * Math.cos(lat2);
-  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
-  return (toDegrees(Math.atan2(y, x)) + 360) % 360;
 };
 
 // Creates restrained editorial curves while preserving exact segment endpoints.
@@ -351,29 +328,6 @@ const getCurvedRouteCoordinates = (coordinates: [number, number][]) => {
     if (!next) return index === 0 ? [coordinate] : [];
     const segment = getCurvedSegment(coordinate, next, index);
     return index === 0 ? segment : segment.slice(1);
-  });
-};
-
-const getFlightFeatures = (coordinates: [number, number][], colorKey: string) => {
-  return coordinates.slice(0, -1).flatMap((from, index) => {
-    const to = coordinates[index + 1];
-    const distanceKm = getDistanceKm(from, to);
-    if (distanceKm < 850) return [];
-    const curve = getCurvedSegment(from, to, index);
-    const midpoint = curve[Math.floor(curve.length / 2)];
-    const afterMidpoint = curve[Math.min(curve.length - 1, Math.floor(curve.length / 2) + 1)];
-    return [{
-      type: "Feature",
-      properties: {
-        year: Number(colorKey) || 0,
-        segmentId: `${colorKey}-${index}`,
-        routeType: "flight",
-        colorKey,
-        iconImage: flightIconName(colorKey),
-        bearing: getBearing(midpoint, afterMidpoint),
-      },
-      geometry: { type: "Point", coordinates: midpoint },
-    }];
   });
 };
 
@@ -424,24 +378,13 @@ const getYearRouteFeatureCollection = (places: Place[]) => {
   };
 };
 
-const getAllFlightFeatureCollection = (places: Place[]) => ({
-  type: "FeatureCollection" as const,
-  features: [...new Set(places.map(getStartYear))].flatMap((year) => {
-    const coordinates = getNearestNeighbourPlacesForYear(places, year)
-      .map(getPrimaryPoint)
-      .filter((point): point is ValidPoint => Boolean(point))
-      .map((point) => point.coordinates);
-    return getFlightFeatures(coordinates, year);
-  }),
-});
-
 // This is the sole route builder. It derives every active route from the canonical
 // selected id, so a popup or a previous map selection can never influence it.
 const buildRouteFeatureCollection = (selectedPlaceId: string, places: Place[]) => {
   const selectedPlace = places.find((place) => place.id === selectedPlaceId);
-  if (!selectedPlace) return { route: emptyFeatureCollection, flights: emptyFeatureCollection };
+  if (!selectedPlace) return { route: emptyFeatureCollection };
   const routeCoordinates = getRouteCoordinatesForPlace(selectedPlace, places);
-  if (routeCoordinates.length < 2) return { route: emptyFeatureCollection, flights: emptyFeatureCollection };
+  if (routeCoordinates.length < 2) return { route: emptyFeatureCollection };
   const year = getStartYear(selectedPlace);
   const color = yearRouteColors[year] ?? "#8D624C";
   return {
@@ -452,10 +395,6 @@ const buildRouteFeatureCollection = (selectedPlaceId: string, places: Place[]) =
         properties: { id: selectedPlaceId, year, color },
         geometry: { type: "LineString", coordinates: getCurvedRouteCoordinates(routeCoordinates) },
       }],
-    },
-    flights: {
-      type: "FeatureCollection" as const,
-      features: getFlightFeatures(routeCoordinates, year),
     },
   };
 };
@@ -504,9 +443,10 @@ const shouldHideBaseMapSymbolLayer = (layer: maplibregl.LayerSpecification) => {
   if (layer.type !== "symbol") return false;
   if ("source" in layer && typeof layer.source === "string" && appMapSources.has(layer.source)) return false;
   const text = layerText(layer);
-  const keep = /(label_country|country|marine|ocean|sea|water_name|continent)/.test(text);
-  const hide = /(label_city|label_town|label_village|label_state|label_other|settlement|locality|neighbour|suburb|hamlet|poi|transit|airport|aerodrome|transportation_name|rail|road|highway|motorway|trunk|primary|secondary|street|path|shield|state|province|admin-1|place|building|address)/.test(text);
-  return hide && !keep;
+  // Basemap labels are intentionally limited to water names. All visited place
+  // labels come from the application data layers below, avoiding unrelated
+  // countries, cities, regions, and POIs at every zoom level.
+  return !/(marine|ocean|sea|water_name)/.test(text);
 };
 
 const setPaintIfChanged = (map: maplibregl.Map, layerId: string, property: string, value: unknown) => {
@@ -520,40 +460,35 @@ const softenBaseMapLayer = (map: maplibregl.Map, layer: maplibregl.LayerSpecific
   const text = layerText(layer);
   try {
     if (layer.type === "background") {
-      setPaintIfChanged(map, layer.id, "background-color", "#F2EDE5");
+      setPaintIfChanged(map, layer.id, "background-color", "#FFFDF8");
       return;
     }
     if (layer.type === "fill") {
       if (/(water|ocean|sea)/.test(text)) {
-        setPaintIfChanged(map, layer.id, "fill-color", "#F1ECE4");
-        setPaintIfChanged(map, layer.id, "fill-opacity", 0.96);
+        setPaintIfChanged(map, layer.id, "fill-color", "#FFFDF8");
+        setPaintIfChanged(map, layer.id, "fill-opacity", 1);
       } else if (/(land|earth|country|admin|boundary|park|natural|landcover|landuse)/.test(text)) {
-        setPaintIfChanged(map, layer.id, "fill-color", "#FBF7EF");
-        setPaintIfChanged(map, layer.id, "fill-opacity", 0.9);
+        setPaintIfChanged(map, layer.id, "fill-color", "#F1E7D8");
+        setPaintIfChanged(map, layer.id, "fill-opacity", 0.94);
       }
       return;
     }
     if (layer.type === "line") {
       if (/(boundary|admin|country)/.test(text)) {
-        setPaintIfChanged(map, layer.id, "line-color", "#D8CFC5");
-        setPaintIfChanged(map, layer.id, "line-opacity", 0.44);
-        setPaintIfChanged(map, layer.id, "line-width", 0.45);
+        setPaintIfChanged(map, layer.id, "line-color", "#C9B9A5");
+        setPaintIfChanged(map, layer.id, "line-opacity", 0.68);
+        setPaintIfChanged(map, layer.id, "line-width", 0.62);
       } else if (/(road|rail|transport|ferry)/.test(text)) {
         setPaintIfChanged(map, layer.id, "line-opacity", 0);
       }
       return;
     }
     if (layer.type === "symbol") {
-      if (/(country|continent)/.test(text)) {
-        setPaintIfChanged(map, layer.id, "text-color", "#9A9188");
-        setPaintIfChanged(map, layer.id, "text-halo-color", "#FBF7EF");
+      if (/(marine|ocean|sea|water)/.test(text)) {
+        setPaintIfChanged(map, layer.id, "text-color", "#716A61");
+        setPaintIfChanged(map, layer.id, "text-halo-color", "#FFFDF8");
         setPaintIfChanged(map, layer.id, "text-halo-width", 0.8);
-        setPaintIfChanged(map, layer.id, "text-opacity", 0.48);
-      } else if (/(marine|ocean|sea|water)/.test(text)) {
-        setPaintIfChanged(map, layer.id, "text-color", "#5E7EA1");
-        setPaintIfChanged(map, layer.id, "text-halo-color", "#F1ECE4");
-        setPaintIfChanged(map, layer.id, "text-halo-width", 0.7);
-        setPaintIfChanged(map, layer.id, "text-opacity", 0.62);
+        setPaintIfChanged(map, layer.id, "text-opacity", 0.72);
       }
     }
   } catch {
@@ -604,7 +539,6 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
   const activeRouteData = useMemo(() => buildRouteFeatureCollection(selectedPlace.id, places), [places, selectedPlace.id]);
   const yearRouteData = useMemo(() => getYearRouteFeatureCollection(places), [places]);
   const selectedRouteData = activeRouteData.route;
-  const flightData = useMemo(() => getAllFlightFeatureCollection(places), [places]);
   const storyPreviewData = useMemo(() => getStoryPreviewFeatureCollection(meaningfulStories, selectedPlace), [meaningfulStories, selectedPlace]);
   const latestSelectedPlaceRef = useRef(selectedPlace);
   const latestPlacesRef = useRef(places);
@@ -613,7 +547,6 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
   const latestPointDataRef = useRef(pointData);
   const latestYearRouteDataRef = useRef(yearRouteData);
   const latestSelectedRouteDataRef = useRef(selectedRouteData);
-  const latestFlightDataRef = useRef(flightData);
   const latestStoryPreviewDataRef = useRef(storyPreviewData);
   latestSelectedPlaceRef.current = selectedPlace;
   latestPlacesRef.current = places;
@@ -622,20 +555,17 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
   latestPointDataRef.current = pointData;
   latestYearRouteDataRef.current = yearRouteData;
   latestSelectedRouteDataRef.current = selectedRouteData;
-  latestFlightDataRef.current = flightData;
   latestStoryPreviewDataRef.current = storyPreviewData;
 
   const applyLatestMapData = useCallback((map: maplibregl.Map) => {
     const pointSource = map.getSource(pointSourceId) as maplibregl.GeoJSONSource | undefined;
     const yearRouteSource = map.getSource(yearRouteSourceId) as maplibregl.GeoJSONSource | undefined;
     const selectedRouteSource = map.getSource(selectedRouteSourceId) as maplibregl.GeoJSONSource | undefined;
-    const flightSource = map.getSource(flightSourceId) as maplibregl.GeoJSONSource | undefined;
     const storyPreviewSource = map.getSource(storyPreviewSourceId) as maplibregl.GeoJSONSource | undefined;
-    if (!pointSource || !yearRouteSource || !selectedRouteSource || !flightSource || !storyPreviewSource) return false;
+    if (!pointSource || !yearRouteSource || !selectedRouteSource || !storyPreviewSource) return false;
     pointSource.setData(latestPointDataRef.current as never);
     yearRouteSource.setData(latestYearRouteDataRef.current as never);
     selectedRouteSource.setData(latestSelectedRouteDataRef.current as never);
-    flightSource.setData(latestFlightDataRef.current as never);
     storyPreviewSource.setData(latestStoryPreviewDataRef.current as never);
     return true;
   }, []);
@@ -672,7 +602,6 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
         await registerStoryPreviewImages(map, latestMeaningfulStoriesRef.current);
         map.addSource(yearRouteSourceId, { type: "geojson", data: emptyFeatureCollection });
         map.addSource(selectedRouteSourceId, { type: "geojson", data: emptyFeatureCollection });
-        map.addSource(flightSourceId, { type: "geojson", data: emptyFeatureCollection });
         map.addSource(storyPreviewSourceId, {
           type: "geojson",
           data: emptyFeatureCollection,
@@ -681,15 +610,14 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
           clusterMaxZoom: 4,
         });
         map.addSource(pointSourceId, { type: "geojson", data: emptyFeatureCollection });
-        map.addLayer({ id: "journal-year-route-casing", type: "line", source: yearRouteSourceId, paint: { "line-color": "#FBF6EE", "line-width": 3.8, "line-opacity": 0.68, "line-dasharray": [1.4, 2.5] } });
-        map.addLayer({ id: "journal-year-route", type: "line", source: yearRouteSourceId, paint: { "line-color": ["coalesce", ["get", "color"], "#8D624C"], "line-width": 1.55, "line-opacity": 0.78, "line-dasharray": [1.4, 2.5] } });
-        map.addLayer({ id: "journey-route-line-selected-casing", type: "line", source: selectedRouteSourceId, paint: { "line-color": "#FBF6EE", "line-width": 4.2, "line-opacity": 0.82, "line-dasharray": [1.5, 2.6] } });
-        map.addLayer({ id: "journey-route-line-selected", type: "line", source: selectedRouteSourceId, paint: { "line-color": ["coalesce", ["get", "color"], "#9B6657"], "line-width": 1.8, "line-opacity": 0.86, "line-dasharray": [1.5, 2.6] } });
-        map.addLayer({ id: "route-flight-icons", type: "symbol", source: flightSourceId, layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 0.46, 3, 0.62], "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true } });
+        map.addLayer({ id: "journal-year-route-casing", type: "line", source: yearRouteSourceId, paint: { "line-color": "#FFFDF8", "line-width": 3.5, "line-opacity": 0.9, "line-dasharray": [1.35, 2.25] } });
+        map.addLayer({ id: "journal-year-route", type: "line", source: yearRouteSourceId, paint: { "line-color": ["coalesce", ["get", "color"], "#8D624C"], "line-width": 1.8, "line-opacity": 0.96, "line-dasharray": [1.35, 2.25] } });
+        map.addLayer({ id: "journey-route-line-selected-casing", type: "line", source: selectedRouteSourceId, paint: { "line-color": "#FFFDF8", "line-width": 4, "line-opacity": 0.94, "line-dasharray": [1.35, 2.25] } });
+        map.addLayer({ id: "journey-route-line-selected", type: "line", source: selectedRouteSourceId, paint: { "line-color": ["coalesce", ["get", "color"], "#9B6657"], "line-width": 2.05, "line-opacity": 1, "line-dasharray": [1.35, 2.25] } });
         map.addLayer({ id: "story-preview-clusters", type: "circle", source: storyPreviewSourceId, filter: ["has", "point_count"], paint: { "circle-radius": ["step", ["get", "point_count"], 14, 3, 18, 6, 22], "circle-color": "rgba(255,253,249,0.78)", "circle-stroke-color": "#CDBFAF", "circle-stroke-width": 1, "circle-opacity": ["interpolate", ["linear"], ["zoom"], 0.5, 0.5, 3.8, 0.2] } });
         map.addLayer({ id: "story-preview-cluster-count", type: "symbol", source: storyPreviewSourceId, filter: ["has", "point_count"], layout: { "text-field": ["get", "point_count_abbreviated"], "text-size": 11, "text-allow-overlap": true }, paint: { "text-color": "#2C241F" } });
-        map.addLayer({ id: "visited-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "visited"], ["!=", ["get", "selected"], true], ["!=", ["get", "relatedToSelectedJourney"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 0.72, 3, 0.94], "icon-allow-overlap": false, "icon-ignore-placement": false } });
-        map.addLayer({ id: "lived-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "lived"], ["!=", ["get", "selected"], true], ["!=", ["get", "relatedToSelectedJourney"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 0.76, 3, 0.98], "icon-allow-overlap": false, "icon-ignore-placement": false } });
+        map.addLayer({ id: "visited-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "visited"], ["!=", ["get", "selected"], true], ["!=", ["get", "relatedToSelectedJourney"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 0.86, 3, 1.04], "icon-allow-overlap": false, "icon-ignore-placement": false } });
+        map.addLayer({ id: "lived-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "lived"], ["!=", ["get", "selected"], true], ["!=", ["get", "relatedToSelectedJourney"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 0.9, 3, 1.08], "icon-allow-overlap": false, "icon-ignore-placement": false } });
         map.addLayer({ id: "related-journey-halo", type: "circle", source: pointSourceId, filter: ["all", ["==", ["get", "relatedToSelectedJourney"], true], ["!=", ["get", "selected"], true]], paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 0.5, 12, 3, 15], "circle-color": "rgba(251, 246, 238, 0.58)", "circle-stroke-color": ["coalesce", ["get", "accentColor"], "#B47A67"], "circle-stroke-opacity": 0.16, "circle-stroke-width": 0.9 } });
         map.addLayer({ id: "related-journey-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "relatedToSelectedJourney"], true], ["!=", ["get", "selected"], true]], layout: { "icon-image": ["get", "selectedIconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.02, 3, 1.16], "icon-allow-overlap": false, "icon-ignore-placement": false } });
         map.addLayer({ id: "selected-point-ring", type: "circle", source: pointSourceId, filter: ["==", ["get", "selected"], true], paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 0.5, 15, 3, 18], "circle-color": "rgba(251, 246, 238, 0.72)", "circle-stroke-color": ["coalesce", ["get", "accentColor"], "#7E5146"], "circle-stroke-opacity": 0.24, "circle-stroke-width": 1 } });
@@ -756,14 +684,13 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
         pointFeatureCount: pointData.features.length,
         yearRouteCoordinateCount: 0,
         selectedJourneyCoordinateCount: selectedRouteData.features[0]?.geometry.coordinates.length ?? 0,
-        flightFeatureCount: flightData.features.length,
         storyPreviewFeatureCount: storyPreviewData.features.length,
         selectedJourneyCoordinates: selectedRouteData.features[0]?.geometry.coordinates ?? [],
-        routeSources: { year: Boolean(map.getSource(yearRouteSourceId)), selected: Boolean(map.getSource(selectedRouteSourceId)), flights: Boolean(map.getSource(flightSourceId)) },
+        routeSources: { year: Boolean(map.getSource(yearRouteSourceId)), selected: Boolean(map.getSource(selectedRouteSourceId)) },
         iconLayers: ["visited-icons", "lived-icons", "related-journey-icons", "selected-icon"].every((id) => Boolean(map.getLayer(id))),
       });
     }
-  }, [applyLatestMapData, mapReady, pointData, yearRouteData, selectedRouteData, flightData, storyPreviewData, selectedPlace.id, activeYear]);
+  }, [applyLatestMapData, mapReady, pointData, yearRouteData, selectedRouteData, storyPreviewData, selectedPlace.id, activeYear]);
 
   useEffect(() => {
     const map = mapRef.current;
