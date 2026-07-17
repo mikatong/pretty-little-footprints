@@ -709,10 +709,21 @@ img {
   z-index: 2;
   inset: 0;
   pointer-events: none;
-  opacity: 0.035;
-  background-image: radial-gradient(rgba(113, 84, 57, 0.72) 0.55px, transparent 0.7px);
-  background-size: 5px 5px;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 140 140' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.78' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.72'/%3E%3C/svg%3E");
+  background-size: 140px 140px;
   mix-blend-mode: multiply;
+}
+
+.map-view {
+  filter: none;
+  background: #FBF7EF;
+}
+
+.map-selected-preview em {
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
 }
 
 .map-view {
@@ -1419,6 +1430,22 @@ img {
   color: var(--surface);
   background: var(--accent);
   box-shadow: 0 14px 38px rgba(44, 36, 31, 0.2);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.rail-edit-link {
+  position: absolute;
+  right: 20px;
+  bottom: 18px;
+  z-index: 2;
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 253, 252, 0.72);
+  border-radius: 999px;
+  color: var(--surface);
+  background: var(--accent);
+  box-shadow: 0 8px 20px rgba(44, 36, 31, 0.12);
+  font-size: 12px;
   font-weight: 700;
   text-decoration: none;
 }
@@ -2212,6 +2239,7 @@ img {
 
   .rail-story-cards {
     overflow: visible;
+    position: relative;
   }
 
   .map-section {
@@ -2476,6 +2504,9 @@ img {
   .rail-story-card strong { font-size: 18px; }
 }
 
+/* Keep the specified layer colors literal; no CSS color filter is applied. */
+.map-view { filter: none; background: #FBF7EF; }
+
 @media (min-width: 761px) and (max-width: 1280px) {
   .hero { padding-right: 42px; padding-left: 42px; }
   .hero-nav { grid-template-columns: minmax(430px,1fr) 135px minmax(340px,.82fr); column-gap: 22px; }
@@ -2495,7 +2526,7 @@ img {
   }
 
   .atlas-layout {
-    grid-template-rows: minmax(680px, 74dvh) auto;
+    grid-template-rows: minmax(560px, 62dvh) auto;
     align-items: stretch;
   }
 
@@ -2512,7 +2543,7 @@ img {
   .map-panel {
     grid-column: 2;
     grid-row: 1;
-    min-height: 680px;
+    min-height: 560px;
     border-bottom: 1px solid var(--border);
   }
 

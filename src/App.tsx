@@ -265,10 +265,12 @@ function AtlasStoryRail({
   selectedPlace,
   storyPlaces,
   onSelect,
+  editHref,
 }: {
   selectedPlace: Place;
   storyPlaces: Place[];
   onSelect: (place: Place) => void;
+  editHref?: string;
 }) {
   const selectedStory = selectedPlace.story;
   const selectedImage = selectedStory?.previewImage ?? selectedStory?.coverImage ?? selectedPlace.photo;
@@ -305,6 +307,7 @@ function AtlasStoryRail({
           );
         })}
       </div>
+      {editHref ? <a className="rail-edit-link" href={editHref}>Edit</a> : null}
     </aside>
   );
 }
@@ -1371,11 +1374,6 @@ export default function App() {
 
   return (
     <main className="app-shell">
-      {(import.meta.env.DEV || session) && selectedVisiblePlace.story ? (
-        <a className="author-edit-button" href={`/compose/${selectedVisiblePlace.story.slug}`}>
-          Edit
-        </a>
-      ) : null}
       <Hero
         placeCount={getPlaceCount(visiblePlaces)}
         countryCount={getCountryCount(visiblePlaces)}
@@ -1410,6 +1408,7 @@ export default function App() {
             selectedPlace={selectedVisiblePlace}
             storyPlaces={storyPlaces}
             onSelect={handleSelectPlace}
+            editHref={(import.meta.env.DEV || session) && selectedVisiblePlace.story ? `/compose/${selectedVisiblePlace.story.slug}` : undefined}
           />
         </section>
       </section>
