@@ -46,64 +46,6 @@ const appMapSources = new Set([
   flightSourceId,
   storyPreviewSourceId,
 ]);
-const iconTypes: MapIconType[] = [
-  "home",
-  "city",
-  "academic",
-  "temple",
-  "palace",
-  "pagoda",
-  "tower",
-  "bridge",
-  "mountain",
-  "fitzRoy",
-  "machuPicchu",
-  "iceberg",
-  "snow",
-  "forest",
-  "cypress",
-  "coast",
-  "tropical",
-  "palm",
-  "splitGate",
-  "desert",
-  "cactus",
-  "waterfall",
-  "eiffel",
-  "bigBen",
-  "cnTower",
-  "spaceNeedle",
-  "neon",
-  "landmark",
-  "default",
-];
-
-const iconAccents: PlaceAccent[] = [
-  { key: "beijing", primary: "#A34F3F", dark: "#6D332B", pale: "#E9C8BE" },
-  { key: "chengdu", primary: "#6F8B63", dark: "#3E6048", pale: "#D5E3D1" },
-  { key: "taiyuan", primary: "#A06D48", dark: "#68422D", pale: "#E6CDB8" },
-  { key: "tokyo", primary: "#B45D4D", dark: "#743A32", pale: "#EAC7C1" },
-  { key: "seoul", primary: "#76619B", dark: "#4E3F6D", pale: "#D8CEE8" },
-  { key: "patagonia", primary: "#7A5A99", dark: "#4F3D68", pale: "#D9CDE7" },
-  { key: "canggu", primary: "#5F8A69", dark: "#3E6048", pale: "#CFE0D1" },
-  { key: "antarctica", primary: "#5E8EAA", dark: "#3D657A", pale: "#D6E5ED" },
-  { key: "iceland", primary: "#6B92B2", dark: "#405F78", pale: "#D5E2EC" },
-  { key: "big-sur", primary: "#537B5C", dark: "#35513C", pale: "#CADACC" },
-  { key: "peru", primary: "#9B8650", dark: "#6A5B37", pale: "#E2D8B6" },
-  { key: "ann-arbor", primary: "#B18A48", dark: "#74582F", pale: "#E9D9B8" },
-  { key: "waterloo", primary: "#477E82", dark: "#2F595D", pale: "#C8DEDF" },
-  { key: "mountain-view", primary: "#718B73", dark: "#475E49", pale: "#D4E0D2" },
-  { key: "hawaii", primary: "#568D7A", dark: "#386354", pale: "#CCE1D9" },
-  { key: "academic", primary: "#6D7F99", dark: "#46566E", pale: "#D4DAE4" },
-  { key: "asia", primary: "#6F9277", dark: "#3E6048", pale: "#CFE0D1" },
-  { key: "europe", primary: "#8D624C", dark: "#5B3C31", pale: "#E7DED2" },
-  { key: "north-america", primary: "#7F9FB2", dark: "#405F78", pale: "#D5E2EC" },
-  { key: "southwest", primary: "#B47A43", dark: "#7A4B2B", pale: "#EAD1B4" },
-  { key: "tropical", primary: "#5F8A69", dark: "#3E6048", pale: "#CFE0D1" },
-  { key: "forest", primary: "#537B5C", dark: "#35513C", pale: "#CADACC" },
-  { key: "default", primary: "#8D624C", dark: "#5B3C31", pale: "#E7DED2" },
-];
-
 const emptyFeatureCollection = {
   type: "FeatureCollection",
   features: [],
@@ -228,16 +170,19 @@ const loadImage = (src: string, size = 64) => {
   });
 };
 
-const registerMapIcons = async (map: maplibregl.Map) => {
-  await Promise.all(iconTypes.flatMap((iconType) =>
-    iconAccents.flatMap((accent) => (["lived", "visited", "selected"] as const).map(async (state) => {
+const registerMapIcons = async (map: maplibregl.Map, places: Place[]) => {
+  const usedIcons = places.flatMap((place) => getValidPoints(place)).map((point) => ({ iconType: point.iconType, accent: point.accent }));
+  const uniqueIcons = [...new Map(usedIcons.map((icon) => [`${icon.iconType}-${icon.accent.key}`, icon])).values()];
+  await Promise.all(uniqueIcons.flatMap(({ iconType, accent }) =>
+    (["lived", "visited", "selected"] as const).map(async (state) => {
       const name = iconImageName(iconType, accent.key, state);
       if (map.hasImage(name)) return;
       const image = await loadSvgImage(getIconSvg(iconType, accent, state));
       map.addImage(name, image, { pixelRatio: 2 });
-    }))
+    })
   ));
-  await Promise.all([...Object.entries(yearRouteColors), ...iconAccents.map((accent) => [accent.key, accent.primary] as const)].map(async ([key, color]) => {
+  const usedRouteColors = [...new Set(places.map(getStartYear))].map((year) => [year, yearRouteColors[year] ?? "#8D624C"] as const);
+  await Promise.all(usedRouteColors.map(async ([key, color]) => {
     const name = flightIconName(key);
     if (map.hasImage(name)) return;
     const image = await loadSvgImage(getFlightSvg(color), 36);
@@ -433,22 +378,35 @@ const fitRouteOrPoint = (map: maplibregl.Map, selectedPlace: Place, places: Plac
   if (point) map.easeTo({ center: point.coordinates, zoom: Math.max(map.getZoom(), 2.15), duration, essential: true });
 };
 
-const getYearRouteFeatureCollection = (places: Place[], activeYear: string, selectedPlace: Place) => {
-  if (selectedPlace.mapPoints && getValidPoints(selectedPlace).length >= 2) return emptyFeatureCollection;
-  const coordinates = getChronologicalPlacesForYear(places, activeYear)
-    .map(getPrimaryPoint)
-    .filter((point): point is ValidPoint => Boolean(point))
-    .map((point) => point.coordinates);
-  if (coordinates.length < 2) return emptyFeatureCollection;
+const getYearRouteFeatureCollection = (places: Place[]) => {
+  const years = [...new Set(places.map(getStartYear))];
   return {
-    type: "FeatureCollection",
-    features: [{
-      type: "Feature",
-      properties: { id: activeYear, color: yearRouteColors[activeYear] ?? "#8D624C" },
-      geometry: { type: "LineString", coordinates: getCurvedRouteCoordinates(coordinates) },
-    }],
+    type: "FeatureCollection" as const,
+    features: years.flatMap((year) => {
+      const coordinates = getChronologicalPlacesForYear(places, year)
+        .map(getPrimaryPoint)
+        .filter((point): point is ValidPoint => Boolean(point))
+        .map((point) => point.coordinates);
+      if (coordinates.length < 2) return [];
+      return [{
+        type: "Feature" as const,
+        properties: { id: year, color: yearRouteColors[year] ?? "#8D624C" },
+        geometry: { type: "LineString" as const, coordinates: getCurvedRouteCoordinates(coordinates) },
+      }];
+    }),
   };
 };
+
+const getAllFlightFeatureCollection = (places: Place[]) => ({
+  type: "FeatureCollection" as const,
+  features: [...new Set(places.map(getStartYear))].flatMap((year) => {
+    const coordinates = getChronologicalPlacesForYear(places, year)
+      .map(getPrimaryPoint)
+      .filter((point): point is ValidPoint => Boolean(point))
+      .map((point) => point.coordinates);
+    return getFlightFeatures(coordinates, year);
+  }),
+});
 
 // This is the sole route builder. It derives every active route from the canonical
 // selected id, so a popup or a previous map selection can never influence it.
@@ -520,7 +478,7 @@ const shouldHideBaseMapSymbolLayer = (layer: maplibregl.LayerSpecification) => {
   if ("source" in layer && typeof layer.source === "string" && appMapSources.has(layer.source)) return false;
   const text = layerText(layer);
   const keep = /(label_country|country|marine|ocean|sea|water_name|continent)/.test(text);
-  const hide = /(label_city|label_town|label_village|label_state|label_other|settlement|locality|neighbour|suburb|hamlet|poi|transit|airport|aerodrome|transportation_name|rail|road|highway|motorway|trunk|primary|secondary|street|path|shield|state|province|admin-1)/.test(text);
+  const hide = /(label_city|label_town|label_village|label_state|label_other|settlement|locality|neighbour|suburb|hamlet|poi|transit|airport|aerodrome|transportation_name|rail|road|highway|motorway|trunk|primary|secondary|street|path|shield|state|province|admin-1|place|building|address)/.test(text);
   return hide && !keep;
 };
 
@@ -535,24 +493,24 @@ const softenBaseMapLayer = (map: maplibregl.Map, layer: maplibregl.LayerSpecific
   const text = layerText(layer);
   try {
     if (layer.type === "background") {
-      setPaintIfChanged(map, layer.id, "background-color", "#F8F3EA");
+      setPaintIfChanged(map, layer.id, "background-color", "#F2EDE5");
       return;
     }
     if (layer.type === "fill") {
       if (/(water|ocean|sea)/.test(text)) {
-        setPaintIfChanged(map, layer.id, "fill-color", "#F4EFE6");
-        setPaintIfChanged(map, layer.id, "fill-opacity", 0.92);
+        setPaintIfChanged(map, layer.id, "fill-color", "#F1ECE4");
+        setPaintIfChanged(map, layer.id, "fill-opacity", 0.96);
       } else if (/(land|earth|country|admin|boundary|park|natural|landcover|landuse)/.test(text)) {
         setPaintIfChanged(map, layer.id, "fill-color", "#FBF7EF");
-        setPaintIfChanged(map, layer.id, "fill-opacity", 0.84);
+        setPaintIfChanged(map, layer.id, "fill-opacity", 0.9);
       }
       return;
     }
     if (layer.type === "line") {
       if (/(boundary|admin|country)/.test(text)) {
-        setPaintIfChanged(map, layer.id, "line-color", "#DDD2C5");
-        setPaintIfChanged(map, layer.id, "line-opacity", 0.56);
-        setPaintIfChanged(map, layer.id, "line-width", 0.55);
+        setPaintIfChanged(map, layer.id, "line-color", "#D8CFC5");
+        setPaintIfChanged(map, layer.id, "line-opacity", 0.44);
+        setPaintIfChanged(map, layer.id, "line-width", 0.45);
       } else if (/(road|rail|transport|ferry)/.test(text)) {
         setPaintIfChanged(map, layer.id, "line-opacity", 0);
       }
@@ -560,15 +518,15 @@ const softenBaseMapLayer = (map: maplibregl.Map, layer: maplibregl.LayerSpecific
     }
     if (layer.type === "symbol") {
       if (/(country|continent)/.test(text)) {
-        setPaintIfChanged(map, layer.id, "text-color", "#9C938A");
+        setPaintIfChanged(map, layer.id, "text-color", "#9A9188");
         setPaintIfChanged(map, layer.id, "text-halo-color", "#FBF7EF");
-        setPaintIfChanged(map, layer.id, "text-halo-width", 0.9);
-        setPaintIfChanged(map, layer.id, "text-opacity", 0.58);
+        setPaintIfChanged(map, layer.id, "text-halo-width", 0.8);
+        setPaintIfChanged(map, layer.id, "text-opacity", 0.48);
       } else if (/(marine|ocean|sea|water)/.test(text)) {
-        setPaintIfChanged(map, layer.id, "text-color", "#6E8AAA");
-        setPaintIfChanged(map, layer.id, "text-halo-color", "#F4EFE6");
+        setPaintIfChanged(map, layer.id, "text-color", "#5E7EA1");
+        setPaintIfChanged(map, layer.id, "text-halo-color", "#F1ECE4");
         setPaintIfChanged(map, layer.id, "text-halo-width", 0.7);
-        setPaintIfChanged(map, layer.id, "text-opacity", 0.58);
+        setPaintIfChanged(map, layer.id, "text-opacity", 0.62);
       }
     }
   } catch {
@@ -621,9 +579,9 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
   const selectedAccent = getPlaceAccent(selectedPlace);
   const pointData = useMemo(() => getPointFeatureCollection(places, selectedPlace), [places, selectedPlace]);
   const activeRouteData = useMemo(() => buildRouteFeatureCollection(selectedPlace.id, places), [places, selectedPlace.id]);
-  const yearRouteData = emptyFeatureCollection;
+  const yearRouteData = useMemo(() => getYearRouteFeatureCollection(places), [places]);
   const selectedRouteData = activeRouteData.route;
-  const flightData = activeRouteData.flights;
+  const flightData = useMemo(() => getAllFlightFeatureCollection(places), [places]);
   const storyPreviewData = useMemo(() => getStoryPreviewFeatureCollection(meaningfulStories, selectedPlace), [meaningfulStories, selectedPlace]);
   const latestSelectedPlaceRef = useRef(selectedPlace);
   const latestPlacesRef = useRef(places);
@@ -706,7 +664,7 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
       void (async () => {
         styleBaseMap(map);
         window.setTimeout(() => styleBaseMap(map), 250);
-        await registerMapIcons(map);
+        await registerMapIcons(map, latestPlacesRef.current);
         await registerStoryPreviewImages(map, latestMeaningfulStoriesRef.current);
         map.addSource(yearRouteSourceId, { type: "geojson", data: emptyFeatureCollection });
         map.addSource(selectedRouteSourceId, { type: "geojson", data: emptyFeatureCollection });
@@ -834,6 +792,11 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
       ) : null}
       <div className="map-compass" aria-hidden="true">
         <span>N</span>
+      </div>
+      <div className="map-route-legend" aria-label="Route years">
+        {["2026", "2025", "2024", "2023", "2022 or earlier"].map((year) => (
+          <span key={year} className={`route-${year.slice(0, 4)}`}><i />{year}</span>
+        ))}
       </div>
     </div>
   );

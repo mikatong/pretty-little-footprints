@@ -31,11 +31,15 @@ export function Hero({ placeCount, countryCount, sinceYear }: HeroProps) {
           <span>Atlas</span>
           <i />
         </span>
-        <div>
+        <div className="hero-links">
           <a href="#journey">Timeline</a>
           <a href="#map">Map</a>
           <a href="/stories">Stories</a>
           <a href="#about">About</a>
+        </div>
+        <div className="hero-actions" aria-hidden="true">
+          <span className="hero-icon-button hero-home-icon" />
+          <span className="hero-icon-button hero-menu-icon" />
         </div>
       </nav>
 

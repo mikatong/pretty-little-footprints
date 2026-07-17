@@ -3,3 +3,11 @@ dist
 .DS_Store
 .env
 .env.local
+
+# Local story image assets
+public/images/stories/**/*.jpg
+public/images/stories/**/*.jpeg
+public/images/stories/**/*.png
+public/images/stories/**/*.webp
+public/images/stories/**/*.heic
+public/images/stories/**/*.heif
