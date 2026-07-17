@@ -278,17 +278,18 @@ function AtlasStoryRail({
 
   return (
     <aside className="story-panel atlas-story-rail" id="stories" style={{ "--place-accent": accent.primary, "--place-accent-pale": accent.pale } as Record<string, string>}>
-      <section className="rail-selected-copy" aria-label="Selected place story">
-        <p>{selectedPlace.dateLabel}</p>
-        <strong><PlaceGlyph place={selectedPlace} className="rail-selected-glyph" />{selectedStory?.title ?? selectedPlace.name}</strong>
-        <small>{selectedPlace.country}</small>
-        {selectedText ? <em>{selectedText}</em> : null}
-        {selectedStory ? <a href={`/stories/${selectedStory.slug}`}>Read full story →</a> : null}
+      <section className="rail-featured-story" aria-label="Selected place story">
+        <div className="rail-selected-copy">
+          <p>{selectedPlace.dateLabel}</p>
+          <strong><PlaceGlyph place={selectedPlace} className="rail-selected-glyph" />{selectedStory?.title ?? selectedPlace.name}</strong>
+          <small>{selectedPlace.country}</small>
+          {selectedText ? <em>{selectedText}</em> : null}
+          {selectedStory ? <a href={`/stories/${selectedStory.slug}`}>Read full story →</a> : null}
+        </div>
+        <button className="rail-selected-image" type="button" onClick={() => onSelect(selectedPlace)} aria-label={`Select ${selectedPlace.name}`}>
+          {selectedImage ? <img src={selectedImage} alt={`${selectedPlace.name} travel memory`} loading="lazy" decoding="async" /> : <PlaceGlyph place={selectedPlace} />}
+        </button>
       </section>
-
-      <button className="rail-selected-image" type="button" onClick={() => onSelect(selectedPlace)} aria-label={`Select ${selectedPlace.name}`}>
-        {selectedImage ? <img src={selectedImage} alt={`${selectedPlace.name} travel memory`} /> : <PlaceGlyph place={selectedPlace} />}
-      </button>
 
       <div className="rail-story-cards" aria-label="More featured stories">
         {railPlaces.map((place) => {
@@ -296,7 +297,7 @@ function AtlasStoryRail({
           return (
             <button className="rail-story-card" key={place.id} type="button" onClick={() => onSelect(place)}>
               <span className="rail-card-image">
-                {image ? <img src={image} alt={`${place.name} travel memory`} /> : <PlaceGlyph place={place} />}
+                {image ? <img src={image} alt={`${place.name} travel memory`} loading="lazy" decoding="async" /> : <PlaceGlyph place={place} />}
               </span>
               <strong>{place.story?.title ?? place.name}</strong>
               <small>{place.country}</small>

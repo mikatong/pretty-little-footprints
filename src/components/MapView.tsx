@@ -398,6 +398,34 @@ const getFlightFeatures = (coordinates: [number, number][], colorKey: string) =>
   });
 };
 
+const getRouteCoordinatesForPlace = (selectedPlace: Place, places: Place[]) => {
+  const selectedCoordinates = getValidPoints(selectedPlace).map((point) => point.coordinates);
+  const hasExplicitRoute = Boolean(selectedPlace.mapPoints && selectedCoordinates.length >= 2);
+  return hasExplicitRoute
+    ? selectedCoordinates
+    : getChronologicalPlacesForYear(places, getStartYear(selectedPlace))
+      .map(getPrimaryPoint)
+      .filter((point): point is ValidPoint => Boolean(point))
+      .map((point) => point.coordinates);
+};
+
+const fitRouteOrPoint = (map: maplibregl.Map, selectedPlace: Place, places: Place[], duration = 620) => {
+  const routeCoordinates = getRouteCoordinatesForPlace(selectedPlace, places);
+  if (routeCoordinates.length > 1) {
+    const bounds = new maplibregl.LngLatBounds();
+    routeCoordinates.forEach((coordinate) => bounds.extend(coordinate));
+    map.fitBounds(bounds, {
+      padding: window.innerWidth < 700 ? 42 : { top: 92, right: 118, bottom: 132, left: 118 },
+      maxZoom: 3.35,
+      duration,
+      essential: true,
+    });
+    return;
+  }
+  const point = getPrimaryPoint(selectedPlace);
+  if (point) map.easeTo({ center: point.coordinates, zoom: Math.max(map.getZoom(), 2.15), duration, essential: true });
+};
+
 const getYearRouteFeatureCollection = (places: Place[], activeYear: string, selectedPlace: Place) => {
   if (selectedPlace.mapPoints && getValidPoints(selectedPlace).length >= 2) return emptyFeatureCollection;
   const coordinates = getChronologicalPlacesForYear(places, activeYear)
@@ -420,14 +448,7 @@ const getYearRouteFeatureCollection = (places: Place[], activeYear: string, sele
 const buildRouteFeatureCollection = (selectedPlaceId: string, places: Place[]) => {
   const selectedPlace = places.find((place) => place.id === selectedPlaceId);
   if (!selectedPlace) return { route: emptyFeatureCollection, flights: emptyFeatureCollection };
-  const selectedCoordinates = getValidPoints(selectedPlace).map((point) => point.coordinates);
-  const hasExplicitRoute = Boolean(selectedPlace.mapPoints && selectedCoordinates.length >= 2);
-  const routeCoordinates = hasExplicitRoute
-    ? selectedCoordinates
-    : getChronologicalPlacesForYear(places, getStartYear(selectedPlace))
-      .map(getPrimaryPoint)
-      .filter((point): point is ValidPoint => Boolean(point))
-      .map((point) => point.coordinates);
+  const routeCoordinates = getRouteCoordinatesForPlace(selectedPlace, places);
   if (routeCoordinates.length < 2) return { route: emptyFeatureCollection, flights: emptyFeatureCollection };
   const year = getStartYear(selectedPlace);
   const color = yearRouteColors[year] ?? "#8D624C";
@@ -477,31 +498,6 @@ const getStoryPreviewFeatureCollection = (places: Place[], selectedPlace: Place)
   };
 };
 
-const escapeHtml = (value: string) => value
-  .replace(/&/g, "&amp;")
-  .replace(/</g, "&lt;")
-  .replace(/>/g, "&gt;")
-  .replace(/"/g, "&quot;");
-
-const getSelectedPreviewHtml = (place: Place) => {
-  if (!hasMeaningfulStoryContent(place) || !place.story) return "";
-  const accent = getPlaceAccent(place);
-  const storyImage = place.story.previewImage ?? place.story.coverImage;
-  const image = storyImage ? `<img src="${escapeHtml(storyImage)}" alt="${escapeHtml(place.name)} story preview" />` : "";
-  const previewText = place.story.previewSummary || place.story.dek || place.note;
-  return `
-    <article class="map-selected-preview" style="--place-accent:${accent.primary};--place-accent-pale:${accent.pale}">
-      ${image}
-      <div>
-        <small>${escapeHtml(place.dateLabel)} · ${escapeHtml(place.country)}</small>
-        <strong>${escapeHtml(place.story.title ?? place.name)}</strong>
-        ${previewText ? `<p>${escapeHtml(previewText)}</p>` : ""}
-        <a href="/stories/${escapeHtml(place.story.slug)}">Read story →</a>
-      </div>
-    </article>
-  `;
-};
-
 const setCursor = (map: maplibregl.Map, cursor: string) => {
   map.getCanvas().style.cursor = cursor;
 };
@@ -519,10 +515,12 @@ const hideUnrelatedMapLabels = (map: maplibregl.Map) => {
 export function MapView({ places, selectedPlace, activeYear, meaningfulStories, onSelect }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
-  const popupRef = useRef<maplibregl.Popup | null>(null);
   const lastCameraSelectionRef = useRef<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(true);
+  const selectedStoryImage = selectedPlace.story?.previewImage ?? selectedPlace.story?.coverImage;
+  const selectedPreviewText = selectedPlace.story?.previewSummary || selectedPlace.story?.dek || selectedPlace.note;
+  const selectedAccent = getPlaceAccent(selectedPlace);
   const pointData = useMemo(() => getPointFeatureCollection(places, selectedPlace), [places, selectedPlace]);
   const activeRouteData = useMemo(() => buildRouteFeatureCollection(selectedPlace.id, places), [places, selectedPlace.id]);
   const yearRouteData = emptyFeatureCollection;
@@ -590,18 +588,8 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
         button.title = "Return to selected place";
         button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3.5 10 8.5-7 8.5 7v10h-6v-6h-5v6h-6z"/></svg>';
         button.addEventListener("click", () => {
-          const currentPlace = latestSelectedPlaceRef.current;
-          setPreviewOpen(false);
           applyLatestMapData(map);
-          const routePoints = getValidPoints(currentPlace);
-          if (routePoints.length > 1) {
-            const bounds = new maplibregl.LngLatBounds();
-            routePoints.forEach((point) => bounds.extend(point.coordinates));
-            map.fitBounds(bounds, { padding: window.innerWidth < 700 ? 46 : 72, maxZoom: 3.4, duration: 520, essential: true });
-            return;
-          }
-          const point = getPrimaryPoint(currentPlace);
-          if (point) map.easeTo({ center: point.coordinates, zoom: Math.max(map.getZoom(), 2.2), duration: 520, essential: true });
+          fitRouteOrPoint(map, latestSelectedPlaceRef.current, latestPlacesRef.current, 540);
         });
         container.append(button);
         return container;
@@ -621,7 +609,7 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
           data: emptyFeatureCollection,
           cluster: true,
           clusterRadius: 54,
-          clusterMaxZoom: 3.6,
+          clusterMaxZoom: 4,
         });
         map.addSource(pointSourceId, { type: "geojson", data: emptyFeatureCollection });
         map.addLayer({ id: "journal-year-route-casing", type: "line", source: yearRouteSourceId, paint: { "line-color": "#F6F0E8", "line-width": 5, "line-opacity": 0.76, "line-dasharray": [1.8, 2.4] } });
@@ -704,38 +692,9 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
     if (!map || !mapReady) return;
     if (lastCameraSelectionRef.current === selectedPlace.id) return;
     lastCameraSelectionRef.current = selectedPlace.id;
-    const primaryPoint = getPrimaryPoint(selectedPlace);
-    const selectedRoutePoints = getValidPoints(selectedPlace);
-    if (selectedRoutePoints.length > 1) {
-      const bounds = new maplibregl.LngLatBounds();
-      selectedRoutePoints.forEach((point) => bounds.extend(point.coordinates));
-      map.fitBounds(bounds, { padding: window.innerWidth < 700 ? 46 : 72, maxZoom: 3.4, duration: 650, essential: true });
-      return;
-    }
-    if (primaryPoint && !map.getBounds().contains(primaryPoint.coordinates)) {
-      map.easeTo({ center: primaryPoint.coordinates, zoom: map.getZoom(), duration: 520, easing: (time) => 1 - Math.pow(1 - time, 3), essential: true });
-    }
-  }, [selectedPlace, mapReady]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !mapReady) return;
-    popupRef.current?.remove();
-    if (!previewOpen) return;
-    const primaryPoint = getPrimaryPoint(selectedPlace);
-    const html = getSelectedPreviewHtml(selectedPlace);
-    if (!primaryPoint || !html) return;
-    popupRef.current = new maplibregl.Popup({
-      closeButton: true,
-      closeOnClick: false,
-      className: "journal-map-popup",
-      offset: 18,
-      maxWidth: "280px",
-    })
-      .setLngLat(primaryPoint.coordinates)
-      .setHTML(html)
-      .addTo(map);
-  }, [selectedPlace, mapReady, previewOpen]);
+    applyLatestMapData(map);
+    fitRouteOrPoint(map, selectedPlace, places, 650);
+  }, [applyLatestMapData, selectedPlace, places, mapReady]);
 
   useEffect(() => {
     setPreviewOpen(true);
@@ -744,6 +703,24 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
   return (
     <div className="map-shell">
       <div ref={containerRef} className="map-view" aria-label="Interactive travel footprint map" />
+      {previewOpen && hasMeaningfulStoryContent(selectedPlace) && selectedPlace.story ? (
+        <article
+          className="map-selected-preview map-selected-preview-overlay"
+          style={{ "--place-accent": selectedAccent.primary, "--place-accent-pale": selectedAccent.pale } as Record<string, string>}
+        >
+          <button className="map-selected-preview-close" type="button" aria-label="Close story preview" onClick={() => setPreviewOpen(false)}>×</button>
+          {selectedStoryImage ? <img src={selectedStoryImage} alt={`${selectedPlace.name} story preview`} loading="lazy" decoding="async" /> : null}
+          <div>
+            <small>{selectedPlace.dateLabel} · {selectedPlace.country}</small>
+            <strong>{selectedPlace.story.title ?? selectedPlace.name}</strong>
+            {selectedPreviewText ? <p>{selectedPreviewText}</p> : null}
+            <a href={`/stories/${selectedPlace.story.slug}`}>Read story →</a>
+          </div>
+        </article>
+      ) : null}
+      <div className="map-compass" aria-hidden="true">
+        <span>N</span>
+      </div>
     </div>
   );
 }

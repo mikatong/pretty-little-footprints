@@ -26,6 +26,11 @@ export function Hero({ placeCount, countryCount, sinceYear }: HeroProps) {
             <dd>{countryCount}</dd>
           </div>
         </dl>
+        <span className="atlas-badge" aria-hidden="true">
+          <span>Personal</span>
+          <span>Atlas</span>
+          <i />
+        </span>
         <div>
           <a href="#journey">Timeline</a>
           <a href="#map">Map</a>
