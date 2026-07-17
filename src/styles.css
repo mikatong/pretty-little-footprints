@@ -703,6 +703,18 @@ img {
   position: relative;
 }
 
+.map-shell::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: radial-gradient(rgba(113, 84, 57, 0.72) 0.55px, transparent 0.7px);
+  background-size: 5px 5px;
+  mix-blend-mode: multiply;
+}
+
 .map-view {
   background: var(--map-water);
   filter: sepia(0.025) saturate(0.84) brightness(1.05) contrast(0.9);
@@ -2471,4 +2483,43 @@ img {
   .atlas-layout { grid-template-columns: 340px minmax(0,1fr); }
   .timeline-panel .module-header, .timeline-panel .year-toggle, .timeline-panel .timeline-link, .timeline-items { padding-left: 32px; }
   .timeline-items::before { left: 53px; }
+}
+
+/* The atlas is intentionally allowed to breathe vertically on desktop: the
+   story rail follows the map in normal document flow instead of shrinking it. */
+@media (min-width: 761px) {
+  .app-shell {
+    height: auto;
+    min-height: calc(100dvh - 16px);
+    overflow: visible;
+  }
+
+  .atlas-layout {
+    grid-template-rows: minmax(680px, 74dvh) auto;
+    align-items: stretch;
+  }
+
+  .timeline-panel {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    max-height: calc(100dvh - 16px - clamp(98px, 11.6vh, 132px));
+    position: sticky;
+    top: 8px;
+  }
+
+  .map-section { display: contents; }
+
+  .map-panel {
+    grid-column: 2;
+    grid-row: 1;
+    min-height: 680px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .story-panel {
+    grid-column: 2;
+    grid-row: 2;
+    min-height: 230px;
+    overflow: visible;
+  }
 }

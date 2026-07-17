@@ -1,4 +1,5 @@
 import type { MapIconType, MapPoint, Place } from "./types";
+import { resolvePlaceIconKey } from "./iconTaxonomy";
 
 export type PlaceAccent = {
   key: string;
@@ -67,34 +68,5 @@ export const getPlaceAccent = (place: Place, point?: MapPoint | Place): PlaceAcc
 };
 
 export const getPlaceIconType = (place: Place, point?: MapPoint | Place): MapIconType => {
-  if (place.mapIconType) return place.mapIconType;
-  const text = textFor(place, point);
-  if (/beijing|forbidden/.test(text)) return "palace";
-  if (/shanghai/.test(text)) return "tower";
-  if (/hong-kong/.test(text)) return "city";
-  if (/chengdu/.test(text)) return "temple";
-  if (/taiyuan/.test(text)) return "pagoda";
-  if (/tokyo/.test(text)) return "tower";
-  if (/seoul/.test(text)) return "palace";
-  if (/canggu|honolulu|maui|los-angeles|palm-springs/.test(text)) return "palm";
-  if (/ubud|bali|island/.test(text)) return "splitGate";
-  if (/patagonia|fitz/.test(text)) return "fitzRoy";
-  if (/machu|peru-journey/.test(text)) return "machuPicchu";
-  if (/cusco|andes|banff|yosemite|tahoe|grand-canyon|mount|mountain/.test(text)) return "mountain";
-  if (/antarctica/.test(text)) return "iceberg";
-  if (/iceland|glacier|snow/.test(text)) return "snow";
-  if (/big-sur|redwood|cypress|forest|algonquin/.test(text)) return "cypress";
-  if (/waterloo|ann-arbor|mountain-view|stanford|mcmaster|cambridge|oxford/.test(text)) return "academic";
-  if (/san-francisco/.test(text)) return "bridge";
-  if (/seattle/.test(text)) return "spaceNeedle";
-  if (/chicago/.test(text)) return "city";
-  if (/toronto/.test(text)) return "cnTower";
-  if (/niagara/.test(text)) return "waterfall";
-  if (/arizona|sedona|phoenix|page|joshua|desert|southwest/.test(text)) return "cactus";
-  if (/las-vegas/.test(text)) return "neon";
-  if (/paris/.test(text)) return "eiffel";
-  if (/london/.test(text)) return "bigBen";
-  if (/coast|carmel|santa-cruz|point-lobos|victoria|lima|nice|cancun|punta-cana|los-cabos|miami|key-west/.test(text)) return "coast";
-  if (place.category === "lived") return "home";
-  return "landmark";
+  return resolvePlaceIconKey(place, point);
 };
