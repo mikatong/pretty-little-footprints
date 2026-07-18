@@ -35,6 +35,18 @@ const paths = {
   spaceNeedle: <><path d="M12 4v16M6 10h12M8 8h8M9 20h6M9 14l6 6M15 14l-6 6" /></>,
   neon: <><path d="M5 8h14v8H5z" /><path d="M8 12h8M9 16v4M15 16v4" /></>,
   landmark: <><path d="M7 20h10l-2-9H9z" /><path d="M12 5v15M9 5h6M8 11h8" /></>,
+  chengdu: <><path d="M4 20h16M6.5 20v-6.5h11V20M8 13.5l4-3.5 4 3.5M6 11.5l6-4.5 6 4.5M4 10l2-3M20 10l-2-3" /></>,
+  beijing: <><path d="M4 20h16M6 20v-6.5h12V20M5 13.5h14M6.5 11.5h11M5.5 10h13M8 8.5h8M10 7h4" /></>,
+  shanghai: <><path d="M4 20h16M6 20v-5h2v5M9 20v-8h3v8M13.5 20V8h2v12M17 20v-4h2v4M14.5 8V5M13 11h4M13 14h5" /></>,
+  seoul: <><path d="M3 20h18M5 18.5l4-4 2 2 2.5-6 5.5 8M11.5 10.5V5M10 7h3M9.5 9h4" /></>,
+  tokyo: <><path d="M5 20h14M12 20V7M10 20l2-13 2 13M8.5 15h7M9.5 12h5M12 7V4" /></>,
+  bali: <><path d="M3.5 20h17M6 20v-6h12v6M5 14h14M7 12h10M8.5 10h7M10 8h4M19.5 19c-1.5-4-1.5-8 0-11" /></>,
+  antarctica: <><path d="M3 20h18M5 18l4-8 3 5 2-8 5 11M7 20c3 1 9 1 12 0M16 16c1-2 2-2.5 3-1" /></>,
+  lima: <><path d="M4 20h16M6 20v-7h12v7M4.5 13h15M6.5 11h11M8 9h8M10 7h4M8 15v4M11 15v4M14 15v4" /></>,
+  newYork: <><path d="M4 20h16M6 20v-6h2v6M9 20V9h3v11M13 20V6h2v14M16 20v-5h2v5M14 6V4M12.5 12h3" /></>,
+  bayArea: <><path d="M3 20h18M4.5 19.5c2.5-6 5-6 7.5 0M12 19.5c2.5-6 5-6 7.5 0M5.5 16h13M6.5 14v6M17.5 14v6" /></>,
+  vancouver: <><path d="M3 20h18M5 20v-5h4v5M10.5 20v-7h3.5v7M15.5 20v-4h3v4M7 15V5M5.5 7h3M5 9h4M17 16v-7M15.5 11h3" /></>,
+  iceland: <><path d="M3 20h18M4.5 18.5l4-7 2.5 4 3-8 6 11M6 20c3 1 8 1 12 0M8.5 11.5l1 4M14 7.5l.5 8" /></>,
   default: <><path d="M12 4c4 0 7 3 7 7 0 5-7 10-7 10S5 16 5 11c0-4 3-7 7-7z" /><circle cx="12" cy="11" r="2" /></>,
 };
 

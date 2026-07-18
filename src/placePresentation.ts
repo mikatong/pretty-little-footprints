@@ -70,3 +70,9 @@ export const getPlaceAccent = (place: Place, point?: MapPoint | Place): PlaceAcc
 export const getPlaceIconType = (place: Place, point?: MapPoint | Place): MapIconType => {
   return resolvePlaceIconKey(place, point);
 };
+
+/** Only these editorial landmarks appear at the global atlas tier. */
+export const isMajorDestination = (place: Place, point?: MapPoint | Place) => {
+  const text = textFor(place, point);
+  return /(chengdu|beijing|shanghai|seoul|tokyo|canggu|ubud|bali|patagonia|antarctica|machu|lima|paris|london|new-york|san-francisco|palo-alto|vancouver|iceland)/.test(text);
+};

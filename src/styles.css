@@ -2570,19 +2570,22 @@ img {
 
 .atlas-story-rail {
   position: static;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr) auto;
+  grid-template-columns: minmax(180px, 230px) minmax(300px, 420px) minmax(0, 1fr) auto;
   align-items: center;
+  column-gap: 18px;
 }
 
 .rail-featured-story {
-  min-width: 0;
-  grid-template-columns: minmax(0, 1fr) minmax(132px, 0.7fr);
+  display: contents;
 }
 
 .rail-selected-copy,
 .rail-story-cards {
   min-width: 0;
 }
+
+.rail-selected-copy { grid-column: 1; }
+.rail-selected-image { grid-column: 2; min-width: 300px; }
 
 .rail-selected-copy strong,
 .rail-selected-copy em,
@@ -2593,9 +2596,12 @@ img {
 
 .rail-story-cards {
   display: flex;
+  grid-column: 3;
   align-items: stretch;
   min-width: 0;
   overflow-x: auto;
+  overflow-y: hidden;
+  padding-inline: 1px;
 }
 
 .rail-edit-link {
@@ -2645,8 +2651,15 @@ img {
   }
 
   .rail-featured-story {
+    display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(130px, 0.72fr);
   }
+
+  .rail-selected-copy,
+  .rail-selected-image,
+  .rail-story-cards { grid-column: auto; }
+
+  .rail-selected-image { min-width: 0; }
 
   .rail-story-cards {
     overflow-x: auto;

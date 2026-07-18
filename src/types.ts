@@ -29,6 +29,18 @@ export type MapIconType =
   | "spaceNeedle"
   | "neon"
   | "landmark"
+  | "chengdu"
+  | "beijing"
+  | "shanghai"
+  | "seoul"
+  | "tokyo"
+  | "bali"
+  | "antarctica"
+  | "lima"
+  | "newYork"
+  | "bayArea"
+  | "vancouver"
+  | "iceland"
   | "default";
 
 export type ImageSource = {

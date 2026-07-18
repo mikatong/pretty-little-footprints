@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { MapIconType, MapPoint, Place } from "../types";
-import { getPlaceAccent, getPlaceIconType, type PlaceAccent } from "../placePresentation";
+import { getPlaceAccent, getPlaceIconType, isMajorDestination, type PlaceAccent } from "../placePresentation";
 import { placeIconKeyByPlaceId } from "../placeIconRegistry";
 import { getStartTime, hasMeaningfulStoryContent, isStoryImagePath } from "../storyUtils";
 
@@ -25,6 +25,8 @@ type ValidPoint = {
   selectedIconImage: string;
   accent: PlaceAccent;
   year: number;
+  majorDestination: boolean;
+  secondaryDestination: boolean;
   coordinates: [number, number];
 };
 
@@ -146,6 +148,18 @@ const getIconSvg = (iconType: MapIconType, accent: PlaceAccent, state: "lived" |
     spaceNeedle: `<path ${line} d="M24 11v25M15 20h18M18 17h12M19 36h10M18 26l12 10M30 26 18 36"/>`,
     neon: `<path ${common} d="M12 17h24v12H12z"/><path ${line} d="M16 23h16M18 29v7M30 29v7"/>`,
     landmark: `<path ${common} d="M14 36h20l-3-15H17z"/><path ${line} d="M24 12v24M18 12h12M17 20h14"/>`,
+    chengdu: `<path ${line} d="M8 36h32M13 36V23h22v13M16 23l8-7 8 7M12 19l12-9 12 9M8 16l5-7M40 16l-5-7M10 30 6 24M38 30l4-6M8 25l5 3M40 25l-5 3"/>`,
+    beijing: `<path ${line} d="M8 36h32M12 36V23h24v13M10 23h28M13 20h22M11 17h26M16 14h16M18 11h12M9 23l5-4M39 23l-5-4M14 28h4M22 28h4M30 28h4"/>`,
+    shanghai: `<path ${line} d="M7 36h34M12 36V25h5v11M19 36V17h5v19M27 36V10h4v26M33 36V22h5v14M29 10V6M27 16h8M26 22h10M25 29h12"/>`,
+    seoul: `<path ${line} d="M6 36h36M10 33 18 25l4 5 5-12 11 15M23 18V8M20 12h6M19 16h8M24 8V5"/>`,
+    tokyo: `<path ${line} d="M10 36h28M24 36V11M20 36l4-25 4 25M17 27h14M19 21h10M22 15h4M24 11V6M13 36c2-4 4-5 6-5M35 36c-2-4-4-5-6-5"/>`,
+    bali: `<path ${line} d="M7 36h34M12 36V24h24v12M10 24h28M14 20h20M17 16h14M20 12h8M12 24l5-4M36 24l-5-4M18 29h3M23 29h3M28 29h3M39 34c-3-7-3-14 0-20M39 18c3-2 5-1 6 1M39 20c-3-2-5-1-6 1"/>`,
+    antarctica: `<path ${line} d="M5 36h38M9 32l9-17 6 11 5-16 10 22M13 36c5 2 17 2 23 0M31 28c2-4 5-5 7-2M31 33v-4M36 34v-5"/>`,
+    lima: `<path ${line} d="M7 36h34M12 36V22h24v14M9 22h30M13 18h22M16 14h16M19 10h10M16 25v7M22 25v7M28 25v7M34 25v7M24 22v-8M21 18h6"/>`,
+    newYork: `<path ${line} d="M7 36h34M11 36V22h5v14M18 36V14h6v22M26 36V8h5v28M33 36V19h5v17M28 8V5M25 20h7M17 22h7M10 27h6"/>`,
+    bayArea: `<path ${line} d="M5 36h38M8 35c5-13 10-13 16 0M24 35c5-13 10-13 16 0M10 28h28M13 24v12M35 24v12M18 20h12M20 20v5M28 20v5"/>`,
+    vancouver: `<path ${line} d="M6 36h36M11 36V25h8v11M21 36V20h7v16M30 36V27h7v9M14 25V9M11 12h6M10 16h8M32 27V13M29 17h6M28 21h8"/>`,
+    iceland: `<path ${line} d="M5 36h38M8 33l8-14 5 8 6-16 13 22M12 36c5 2 18 2 25 0M16 19l2 8M27 11l1 16M33 23l2 10"/>`,
     default: `<path ${common} d="M24 10c7 0 12 5 12 11 0 7-12 17-12 17S12 28 12 21c0-6 5-11 12-11z"/><circle cx="24" cy="21" r="3.5" fill="${stroke}"/>`,
   };
   return `<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 48 48">${bg}${shapes[iconType]}</svg>`;
@@ -230,6 +244,8 @@ const getValidPoints = (place: Place): ValidPoint[] => {
       selectedIconImage: iconImageName(iconType, accent.key, "selected"),
       accent,
       year: Number(getStartYear(place)),
+      majorDestination: isMajorDestination(place, point),
+      secondaryDestination: Boolean(place.featured || place.hasStory || place.category === "lived"),
       coordinates: [point.lng as number, point.lat as number],
     }];
   });
@@ -238,7 +254,7 @@ const getValidPoints = (place: Place): ValidPoint[] => {
 const getPrimaryPoint = (place: Place): ValidPoint | undefined => getValidPoints(place)[0];
 const getSelectedPointIds = (place: Place) => new Set(getValidPoints(place).map((point) => point.id));
 
-const getPointFeatureCollection = (places: Place[], selectedPlace: Place) => {
+const getPointFeatureCollection = (places: Place[], selectedPlace: Place, routeYear: string) => {
   const selectedPointIds = getSelectedPointIds(selectedPlace);
   return {
     type: "FeatureCollection",
@@ -257,6 +273,9 @@ const getPointFeatureCollection = (places: Place[], selectedPlace: Place) => {
         accentKey: point.accent.key,
         accentColor: point.accent.primary,
         accentDark: point.accent.dark,
+        majorDestination: point.majorDestination,
+        secondaryDestination: point.secondaryDestination,
+        routeEndpoint: getStartYear(place) === routeYear,
         selected: point.entryId === selectedPlace.id,
         relatedToSelectedJourney: point.entryId === selectedPlace.id && selectedPointIds.has(point.id),
       },
@@ -345,11 +364,33 @@ const getBearing = (from: [number, number], to: [number, number]) => {
 const getCurvedSegment = (from: [number, number], to: [number, number], segmentIndex: number) => {
   const distanceKm = getDistanceKm(from, to);
   if (distanceKm < 35) return [from, to];
-  const steps = distanceKm > 2500 ? 24 : distanceKm > 700 ? 18 : 12;
+  const steps = distanceKm > 6000 ? 30 : distanceKm > 2500 ? 24 : distanceKm > 700 ? 18 : 12;
   const dx = to[0] - from[0];
   const dy = to[1] - from[1];
   const length = Math.hypot(dx, dy) || 1;
   const direction = segmentIndex % 2 === 0 ? 1 : -1;
+  if (distanceKm > 6000) {
+    // Long-haul legs use two quadratics with a shared tangent at their ocean
+    // midpoint. This avoids a mechanical diagonal while remaining deterministic.
+    const midpoint: [number, number] = [
+      (from[0] + to[0]) / 2 + (-dy / length) * 16 * direction,
+      Math.max(-72, Math.min(82, (from[1] + to[1]) / 2 + (dx / length) * 16 * direction)),
+    ];
+    const tangent = Math.min(length * 0.22, 15);
+    const controlA: [number, number] = [midpoint[0] - (dx / length) * tangent, midpoint[1] - (dy / length) * tangent];
+    const controlB: [number, number] = [midpoint[0] + (dx / length) * tangent, midpoint[1] + (dy / length) * tangent];
+    const sampleQuadratic = (start: [number, number], control: [number, number], end: [number, number], count: number) =>
+      Array.from({ length: count + 1 }, (_, step) => {
+        const t = step / count;
+        const inv = 1 - t;
+        return [
+          inv * inv * start[0] + 2 * inv * t * control[0] + t * t * end[0],
+          inv * inv * start[1] + 2 * inv * t * control[1] + t * t * end[1],
+        ] as [number, number];
+      });
+    const first = sampleQuadratic(from, controlA, midpoint, steps / 2);
+    return [...first, ...sampleQuadratic(midpoint, controlB, to, steps / 2).slice(1)];
+  }
   const offset = Math.min(Math.max(length * (distanceKm > 2500 ? 0.16 : 0.1), 0.24), distanceKm > 2500 ? 11 : 4.8);
   const control: [number, number] = [
     (from[0] + to[0]) / 2 + (-dy / length) * offset * direction,
@@ -387,11 +428,13 @@ const getFlightFeatures = (coordinates: [number, number][], year: string) => coo
   if (getDistanceKm(from, to) < 260) return [];
   const curve = getCurvedSegment(from, to, index);
   const midpoint = curve[Math.floor(curve.length / 2)];
-  const next = curve[Math.min(curve.length - 1, Math.floor(curve.length / 2) + 1)];
+  const earlier = curve[Math.max(0, Math.floor(curve.length * 0.46))];
+  const later = curve[Math.min(curve.length - 1, Math.ceil(curve.length * 0.54))];
   const color = getSegmentColor(year, index);
   return [{
     type: "Feature" as const,
-    properties: { colorKey: color, iconImage: flightIconName(color), bearing: getBearing(midpoint, next) },
+    // The SVG nose points east at zero rotation; MapLibre bearings are north-up.
+    properties: { colorKey: color, iconImage: flightIconName(color), bearing: getBearing(earlier, later) - 90 },
     geometry: { type: "Point" as const, coordinates: midpoint },
   }];
 });
@@ -599,10 +642,10 @@ export function MapView({ places, selectedPlace, selectionRevision, activeYear, 
   const [mapReady, setMapReady] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(true);
   const [previewPosition, setPreviewPosition] = useState<{ left: number; top: number } | null>(null);
-  const pointData = useMemo(() => getPointFeatureCollection(places, selectedPlace), [places, selectedPlace]);
+  const selectedYear = getStartYear(selectedPlace);
+  const pointData = useMemo(() => getPointFeatureCollection(places, selectedPlace, selectedYear), [places, selectedPlace, selectedYear]);
   const visitedCountryData = useMemo(() => getVisitedCountryFeatureCollection(places), [places]);
   // The selected record is canonical: routes and aircraft always use its year.
-  const selectedYear = getStartYear(selectedPlace);
   const yearRouteData = useMemo(() => getYearRouteFeatureCollection(places, selectedYear), [places, selectedYear]);
   const flightData = useMemo(() => getFlightFeatureCollection(places, selectedYear), [places, selectedYear]);
   const storyPreviewData = useMemo(() => getStoryPreviewFeatureCollection(meaningfulStories, selectedPlace), [meaningfulStories, selectedPlace]);
@@ -724,17 +767,23 @@ export function MapView({ places, selectedPlace, selectionRevision, activeYear, 
         map.addLayer({ id: "journal-year-route-casing", type: "line", source: yearRouteSourceId, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#FFFDF8", "line-width": 3.35, "line-opacity": 0.94, "line-dasharray": [1.1, 1.35] } });
         map.addLayer({ id: "journal-year-route", type: "line", source: yearRouteSourceId, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": ["coalesce", ["get", "color"], "#8D624C"], "line-width": 1.72, "line-opacity": 1, "line-dasharray": [1.1, 1.35] } });
         map.addLayer({ id: "route-flight-icons", type: "symbol", source: flightSourceId, layout: { "icon-image": ["get", "iconImage"], "icon-size": 0.9, "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true } });
-        map.addLayer({ id: "visited-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "visited"], ["!=", ["get", "selected"], true], ["!=", ["get", "relatedToSelectedJourney"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 2.04, 3, 2.34], "icon-allow-overlap": true, "icon-ignore-placement": true } });
-        map.addLayer({ id: "lived-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "lived"], ["!=", ["get", "selected"], true], ["!=", ["get", "relatedToSelectedJourney"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 2.13, 3, 2.43], "icon-allow-overlap": true, "icon-ignore-placement": true } });
-        map.addLayer({ id: "related-journey-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "relatedToSelectedJourney"], true], ["!=", ["get", "selected"], true]], layout: { "icon-image": ["get", "selectedIconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 2.34, 3, 2.58], "icon-allow-overlap": true, "icon-ignore-placement": true } });
-        map.addLayer({ id: "selected-icon", type: "symbol", source: pointSourceId, filter: ["==", ["get", "selected"], true], layout: { "icon-image": ["get", "selectedIconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 2.48, 3, 2.72], "icon-allow-overlap": true, "icon-ignore-placement": true } });
+        // Zoom tiers are data-driven rather than collision-driven: the global
+        // atlas shows editorial landmarks/current route endpoints, then stories,
+        // then the remaining locations as the visitor moves closer.
+        map.addLayer({ id: "visited-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "visited"], ["!=", ["get", "selected"], true], ["!", ["get", "relatedToSelectedJourney"]], ["any", ["==", ["get", "majorDestination"], true], ["==", ["get", "routeEndpoint"], true]]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.26, 3, 1.42], "icon-allow-overlap": true, "icon-ignore-placement": true } });
+        map.addLayer({ id: "visited-secondary-icons", type: "symbol", source: pointSourceId, minzoom: 1.6, filter: ["all", ["==", ["get", "locationType"], "visited"], ["!=", ["get", "selected"], true], ["!", ["get", "majorDestination"]], ["!", ["get", "routeEndpoint"]], ["==", ["get", "secondaryDestination"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 1.6, 1.02, 3, 1.2], "icon-allow-overlap": true, "icon-ignore-placement": true } });
+        map.addLayer({ id: "visited-detail-icons", type: "symbol", source: pointSourceId, minzoom: 2.55, filter: ["all", ["==", ["get", "locationType"], "visited"], ["!=", ["get", "selected"], true], ["!", ["get", "majorDestination"]], ["!", ["get", "routeEndpoint"]], ["!", ["get", "secondaryDestination"]]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 2.55, 0.86, 4.5, 1.06], "icon-allow-overlap": true, "icon-ignore-placement": true } });
+        map.addLayer({ id: "lived-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "lived"], ["!=", ["get", "selected"], true], ["!", ["get", "relatedToSelectedJourney"]], ["any", ["==", ["get", "majorDestination"], true], ["==", ["get", "routeEndpoint"], true]]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.3, 3, 1.46], "icon-allow-overlap": true, "icon-ignore-placement": true } });
+        map.addLayer({ id: "lived-secondary-icons", type: "symbol", source: pointSourceId, minzoom: 1.6, filter: ["all", ["==", ["get", "locationType"], "lived"], ["!=", ["get", "selected"], true], ["!", ["get", "majorDestination"]], ["!", ["get", "routeEndpoint"]]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 1.6, 1.04, 3, 1.22], "icon-allow-overlap": true, "icon-ignore-placement": true } });
+        map.addLayer({ id: "related-journey-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "relatedToSelectedJourney"], true], ["!=", ["get", "selected"], true]], layout: { "icon-image": ["get", "selectedIconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.42, 3, 1.58], "icon-allow-overlap": true, "icon-ignore-placement": true } });
+        map.addLayer({ id: "selected-icon", type: "symbol", source: pointSourceId, filter: ["==", ["get", "selected"], true], layout: { "icon-image": ["get", "selectedIconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.56, 3, 1.72], "icon-allow-overlap": true, "icon-ignore-placement": true } });
         map.addLayer({ id: "visited-country-labels", type: "symbol", source: visitedCountrySourceId, minzoom: 1.05, layout: { "text-field": ["get", "country"], "text-size": ["interpolate", ["linear"], ["zoom"], 1.05, 8.5, 3, 10], "text-offset": [0, 2.2], "text-anchor": "top", "text-allow-overlap": false }, paint: { "text-color": "#756B61", "text-halo-color": "#FFFDF8", "text-halo-width": 1.1, "text-opacity": 0.76 } });
         map.addLayer({ id: "visited-place-labels", type: "symbol", source: pointSourceId, filter: ["!=", ["get", "selected"], true], minzoom: 2.15, layout: { "text-field": ["get", "title"], "text-size": ["interpolate", ["linear"], ["zoom"], 2.15, 8.5, 4.5, 10], "text-offset": [0, 2.5], "text-anchor": "top", "text-allow-overlap": false }, paint: { "text-color": ["coalesce", ["get", "accentDark"], "#3B342E"], "text-halo-color": "#FFFDF8", "text-halo-width": 1.05, "text-opacity": 0.8 } });
         map.addLayer({ id: "story-preview-dots", type: "circle", source: storyPreviewSourceId, filter: ["!", ["has", "point_count"]], minzoom: 3.3, paint: { "circle-radius": ["case", ["==", ["get", "selected"], true], 8, ["==", ["get", "featured"], true], 6, 5], "circle-color": "rgba(255,253,249,0.78)", "circle-stroke-color": ["coalesce", ["get", "accentColor"], "#8D624C"], "circle-stroke-width": ["case", ["==", ["get", "selected"], true], 1.6, 1], "circle-opacity": ["interpolate", ["linear"], ["zoom"], 3.3, 0.42, 4.8, 0.78] } });
         map.addLayer({ id: "story-preview-images", type: "symbol", source: storyPreviewSourceId, filter: ["all", ["!", ["has", "point_count"]], ["!=", ["get", "previewImage"], ""]], minzoom: 5.2, layout: { "icon-image": ["get", "previewImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 5.2, 0.34, 6.5, 0.48], "icon-offset": [0, -2.8], "icon-allow-overlap": false } });
         map.addLayer({ id: "selected-place-labels", type: "symbol", source: pointSourceId, filter: ["any", ["==", ["get", "selected"], true], ["==", ["get", "relatedToSelectedJourney"], true]], layout: { "text-field": ["get", "title"], "text-size": 10.5, "text-offset": [1.42, 0], "text-anchor": "left", "text-allow-overlap": false }, paint: { "text-color": ["coalesce", ["get", "accentDark"], "#2c241f"], "text-halo-color": "#FBF7EF", "text-halo-width": 1, "text-opacity": 0.82 } });
         map.addLayer({ id: "story-preview-labels", type: "symbol", source: storyPreviewSourceId, filter: ["all", ["!", ["has", "point_count"]], ["any", ["==", ["get", "selected"], true], ["==", ["get", "featured"], true]]], minzoom: 4.2, layout: { "text-field": ["get", "title"], "text-size": ["interpolate", ["linear"], ["zoom"], 4.2, 9, 5.8, 11], "text-offset": [0, 1.25], "text-anchor": "top", "text-allow-overlap": false }, paint: { "text-color": ["coalesce", ["get", "accentDark"], "#2C241F"], "text-halo-color": "#FBF7EF", "text-halo-width": 1, "text-opacity": 0.78 } });
-        const clickableLayers = ["visited-icons", "lived-icons", "related-journey-icons", "selected-icon", "story-preview-images", "story-preview-dots", "story-preview-labels"];
+        const clickableLayers = ["visited-icons", "visited-secondary-icons", "visited-detail-icons", "lived-icons", "lived-secondary-icons", "related-journey-icons", "selected-icon", "story-preview-images", "story-preview-dots", "story-preview-labels"];
         clickableLayers.forEach((layerId) => {
           map.on("click", layerId, (event) => {
             const entryId = event.features?.[0]?.properties?.entryId;
