@@ -2869,15 +2869,7 @@ img {
   }
 
   .map-section::before {
-    position: absolute;
-    z-index: 0;
-    top: -78px;
-    right: 0;
-    left: 19%;
-    height: 78px;
-    background: #F0E6D5;
-    clip-path: polygon(100% 0, 100% 100%, 0 100%);
-    content: "";
+    display: none;
   }
 
   .map-panel,
@@ -2890,6 +2882,9 @@ img {
   }
 
   .map-panel {
+    z-index: 0;
+    margin-top: -78px;
+    clip-path: polygon(21% 0, 100% 0, 100% 100%, 0 100%);
     border-bottom: 1px solid var(--border);
   }
 
