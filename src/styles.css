@@ -2788,3 +2788,33 @@ img {
     overflow: visible;
   }
 }
+
+/* Compact horizontal story shelf: the selected story is simply the first card. */
+@media (min-width: 761px) {
+  .story-panel {
+    min-height: 0;
+    padding: 13px clamp(20px, 2.2vw, 38px);
+    overflow: hidden;
+  }
+
+  .atlas-story-rail {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .rail-story-cards {
+    grid-column: 1;
+    gap: 12px;
+  }
+
+  .rail-story-card {
+    flex-basis: clamp(138px, 9vw, 166px);
+    gap: 5px;
+    padding-bottom: 8px;
+  }
+
+  .rail-story-card.selected {
+    border-color: color-mix(in srgb, var(--place-accent, var(--accent)) 46%, var(--border-soft));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--place-accent, var(--accent)) 16%, transparent);
+  }
+}

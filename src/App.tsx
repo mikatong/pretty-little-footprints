@@ -271,32 +271,16 @@ function AtlasStoryRail({
   onSelect: (place: Place) => void;
   editHref?: string;
 }) {
-  const selectedStory = selectedPlace.story;
-  const selectedImage = selectedStory?.previewImage ?? selectedStory?.coverImage ?? selectedPlace.photo;
-  const selectedText = selectedStory?.previewSummary ?? selectedStory?.dek ?? selectedPlace.note;
-  const railPlaces = storyPlaces.filter((place) => place.id !== selectedPlace.id);
+  const railPlaces = [selectedPlace, ...storyPlaces.filter((place) => place.id !== selectedPlace.id)];
   const accent = getPlaceAccent(selectedPlace);
 
   return (
     <aside className="story-panel atlas-story-rail" id="stories" style={{ "--place-accent": accent.primary, "--place-accent-pale": accent.pale } as Record<string, string>}>
-      <section className="rail-featured-story" aria-label="Selected place story">
-        <div className="rail-selected-copy">
-          <p>{selectedPlace.dateLabel}</p>
-          <strong><PlaceGlyph place={selectedPlace} className="rail-selected-glyph" />{selectedStory?.title ?? selectedPlace.name}</strong>
-          <small>{selectedPlace.country}</small>
-          {selectedText ? <em>{selectedText}</em> : null}
-          {selectedStory ? <a href={`/stories/${selectedStory.slug}`}>Read full story →</a> : null}
-        </div>
-        <button className="rail-selected-image" type="button" onClick={() => onSelect(selectedPlace)} aria-label={`Select ${selectedPlace.name}`}>
-          {selectedImage ? <img src={selectedImage} alt={`${selectedPlace.name} travel memory`} loading="lazy" decoding="async" /> : <PlaceGlyph place={selectedPlace} />}
-        </button>
-      </section>
-
-      <div className="rail-story-cards" aria-label="More featured stories">
+      <div className="rail-story-cards" aria-label="Featured stories">
         {railPlaces.map((place) => {
           const image = place.story?.previewImage ?? place.story?.coverImage ?? place.photo;
           return (
-            <button className="rail-story-card" key={place.id} type="button" onClick={() => onSelect(place)}>
+            <button className={`rail-story-card${place.id === selectedPlace.id ? " selected" : ""}`} key={place.id} type="button" onClick={() => onSelect(place)} aria-current={place.id === selectedPlace.id ? "true" : undefined}>
               <span className="rail-card-image">
                 {image ? <img src={image} alt={`${place.name} travel memory`} loading="lazy" decoding="async" /> : <PlaceGlyph place={place} />}
               </span>
