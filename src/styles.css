@@ -2831,6 +2831,7 @@ img {
   .hero {
     z-index: 2;
     background: transparent;
+    border-bottom: 0;
   }
 
   .hero-nav {
@@ -2867,6 +2868,7 @@ img {
     grid-row: 1;
     max-height: none;
     position: static;
+    border-top: 1px solid var(--border);
   }
 
   .map-section {
