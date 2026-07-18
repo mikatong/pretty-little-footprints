@@ -2647,6 +2647,68 @@ img {
   .story-panel {
     overflow: hidden;
   }
+
+  /* Atlas rail: every memory has a consistent square photographic window.
+     Excess landscape/portrait image area is intentionally cropped. */
+  .map-section {
+    grid-template-rows: minmax(0, 1fr) clamp(282px, 29vh, 326px);
+  }
+
+  .story-panel {
+    padding: 14px clamp(22px, 2.3vw, 42px);
+  }
+
+  .atlas-story-rail {
+    grid-template-columns: minmax(185px, 220px) minmax(252px, 292px) minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 16px;
+  }
+
+  .rail-selected-copy {
+    align-content: center;
+    padding: 0;
+  }
+
+  .rail-selected-copy p::before {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 10px;
+    border-radius: 50%;
+    background: var(--place-accent, var(--accent));
+    content: "";
+  }
+
+  .rail-selected-glyph {
+    display: none;
+  }
+
+  .rail-selected-image {
+    width: 100%;
+    min-width: 0;
+    aspect-ratio: 1;
+    align-self: center;
+  }
+
+  .rail-selected-image img,
+  .rail-card-image img {
+    object-fit: cover;
+  }
+
+  .rail-story-cards {
+    gap: 14px;
+  }
+
+  .rail-story-card {
+    grid-template-rows: auto auto auto;
+    flex-basis: clamp(156px, 10.2vw, 190px);
+    gap: 7px;
+    padding-bottom: 11px;
+  }
+
+  .rail-card-image {
+    aspect-ratio: 1;
+  }
 }
 
 @media (max-width: 760px) {
