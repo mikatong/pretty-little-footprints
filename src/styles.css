@@ -2516,14 +2516,7 @@ img {
   position: relative;
 }
 
-.atlas-badge::after {
-  content: "";
-  display: block;
-  width: 44px;
-  height: 1px;
-  margin: 10px auto 0;
-  background: #d4b37b;
-}
+.atlas-badge::after { display: none; }
 
 .year-toggle > span {
   display: inline-flex;
@@ -2576,9 +2569,9 @@ img {
 }
 
 .atlas-story-rail {
-  position: relative;
+  position: static;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr) auto;
-  align-items: stretch;
+  align-items: center;
 }
 
 .rail-featured-story {
@@ -2599,11 +2592,15 @@ img {
 }
 
 .rail-story-cards {
+  display: flex;
   align-items: stretch;
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .rail-edit-link {
   position: static;
+  flex: none;
   align-self: end;
   justify-self: end;
   margin: 0 0 2px 2px;

@@ -67,6 +67,7 @@ const yearRouteColors: Record<string, string> = {
   "2016": "#B88C73",
   "2015": "#8D624C",
 };
+const routePalette = [...new Set(Object.values(yearRouteColors))];
 
 const getWorldZoom = () => {
   if (typeof window === "undefined") return 1.2;
@@ -151,7 +152,9 @@ const getIconSvg = (iconType: MapIconType, accent: PlaceAccent, state: "lived" |
 };
 
 const getFlightSvg = (color: string) => {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 48 48"><path d="M5 25 20 21 28 7l4 1-4 14 14 6-1 4-17-3-8 9-4-1 4-10-11 1z" fill="${color}" stroke="#FFFDF8" stroke-width="1.35" stroke-linejoin="round"/><path d="m20 21 8 1M24 29l4-7" fill="none" stroke="#FFFDF8" stroke-width="1.05" stroke-linecap="round" opacity=".9"/></svg>`;
+  // A compact, solid top-down aircraft facing east. MapLibre rotates the asset
+  // from its local bearing, keeping the silhouette aligned to each route curve.
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 48 48"><path d="M44 24c0 1.3-1 2.4-2.4 2.7l-12.5 2.1-7.2 10.1c-.9 1.3-2.7 1.7-4.1.9l-1.4-.8 4.5-11.4-10.7 1.8-3.6 4.5-2.5-.7 1.4-5.5-4.1-1.1v-2.2l4.1-1.1-1.4-5.5 2.5-.7 3.6 4.5 10.7 1.8-4.5-11.4 1.4-.8c1.4-.8 3.2-.4 4.1.9L29.1 19l12.5 2.1C43 21.5 44 22.7 44 24z" fill="${color}"/></svg>`;
 };
 
 const loadSvgImage = (svg: string, size = 48) => {
@@ -184,9 +187,8 @@ const registerMapIcons = async (map: maplibregl.Map, places: Place[]) => {
       map.addImage(name, image, { pixelRatio: 2 });
     })
   ));
-  const routeColors = [...new Set(places.map(getStartYear))].map((year) => [year, yearRouteColors[year] ?? "#8D624C"] as const);
-  await Promise.all(routeColors.map(async ([year, color]) => {
-    const name = flightIconName(year);
+  await Promise.all(routePalette.map(async (color) => {
+    const name = flightIconName(color);
     if (map.hasImage(name)) return;
     map.addImage(name, await loadSvgImage(getFlightSvg(color), 64), { pixelRatio: 2 });
   }));
@@ -372,18 +374,27 @@ const getCurvedRouteCoordinates = (coordinates: [number, number][]) => {
   });
 };
 
-const getFlightFeatures = (coordinates: [number, number][], colorKey: string) => coordinates.slice(0, -1).flatMap((from, index) => {
+const getSegmentColor = (year: string, segmentIndex: number) => {
+  const yearColor = yearRouteColors[year] ?? "#8D624C";
+  const startIndex = routePalette.indexOf(yearColor);
+  return routePalette[(Math.max(startIndex, 0) + segmentIndex) % routePalette.length];
+};
+
+const getFlightFeatures = (coordinates: [number, number][], year: string) => coordinates.slice(0, -1).flatMap((from, index) => {
   const to = coordinates[index + 1];
-  if (getDistanceKm(from, to) < 1200) return [];
+  // A plane belongs to every segment that has sufficient visual breathing room,
+  // not only to transcontinental legs.
+  if (getDistanceKm(from, to) < 260) return [];
   const curve = getCurvedSegment(from, to, index);
   const midpoint = curve[Math.floor(curve.length / 2)];
   const next = curve[Math.min(curve.length - 1, Math.floor(curve.length / 2) + 1)];
+  const color = getSegmentColor(year, index);
   return [{
     type: "Feature" as const,
-    properties: { colorKey, iconImage: flightIconName(colorKey), bearing: getBearing(midpoint, next) },
+    properties: { colorKey: color, iconImage: flightIconName(color), bearing: getBearing(midpoint, next) },
     geometry: { type: "Point" as const, coordinates: midpoint },
   }];
-}).slice(0, 3);
+});
 
 const getRouteCoordinatesForPlace = (selectedPlace: Place, places: Place[]) => {
   const selectedCoordinates = getValidPoints(selectedPlace).map((point) => point.coordinates);
@@ -410,11 +421,11 @@ const getYearRouteFeatureCollection = (places: Place[], activeYear: string) => {
         .filter((point): point is ValidPoint => Boolean(point))
         .map((point) => point.coordinates);
       if (coordinates.length < 2) return [];
-      return [{
+      return coordinates.slice(0, -1).map((from, index) => ({
         type: "Feature" as const,
-        properties: { id: year, color: yearRouteColors[year] ?? "#8D624C" },
-        geometry: { type: "LineString" as const, coordinates: getCurvedRouteCoordinates(coordinates) },
-      }];
+        properties: { id: `${year}-${index}`, year, color: getSegmentColor(year, index) },
+        geometry: { type: "LineString" as const, coordinates: getCurvedSegment(from, coordinates[index + 1], index) },
+      }));
     }),
   };
 };
@@ -510,9 +521,10 @@ const softenBaseMapLayer = (map: maplibregl.Map, layer: maplibregl.LayerSpecific
     }
     if (layer.type === "line") {
       if (/(boundary|admin|country|coast)/.test(text)) {
-        setPaintIfChanged(map, layer.id, "line-color", /(admin|boundary)/.test(text) ? "#E3D8C8" : "#D7C9B5");
-        setPaintIfChanged(map, layer.id, "line-opacity", 0.68);
-        setPaintIfChanged(map, layer.id, "line-width", 0.62);
+        const internalBorder = /(admin.*(?:[1-9]|state|region|district)|state|region|district)/.test(text);
+        setPaintIfChanged(map, layer.id, "line-color", internalBorder ? "#DDD0BE" : "#C8B79F");
+        setPaintIfChanged(map, layer.id, "line-opacity", internalBorder ? 0.76 : 0.9);
+        setPaintIfChanged(map, layer.id, "line-width", internalBorder ? 0.58 : 0.82);
       } else if (/(road|rail|transport|ferry)/.test(text)) {
         setPaintIfChanged(map, layer.id, "line-opacity", 0);
       }
@@ -692,8 +704,11 @@ export function MapView({ places, selectedPlace, selectionRevision, activeYear, 
       },
       onRemove() {},
     }, "top-right");
-    map.on("load", () => {
-      void (async () => {
+    let installingAppLayers = false;
+    const installAppLayers = async () => {
+      if (installingAppLayers || map.getSource(pointSourceId)) return;
+      installingAppLayers = true;
+      try {
         styleBaseMap(map);
         window.setTimeout(() => styleBaseMap(map), 250);
         await registerMapIcons(map, latestPlacesRef.current);
@@ -706,17 +721,13 @@ export function MapView({ places, selectedPlace, selectionRevision, activeYear, 
         });
         map.addSource(pointSourceId, { type: "geojson", data: emptyFeatureCollection });
         map.addSource(visitedCountrySourceId, { type: "geojson", data: emptyFeatureCollection });
-        map.addLayer({ id: "journal-year-route-casing", type: "line", source: yearRouteSourceId, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#FBF7EF", "line-width": 4.3, "line-opacity": 0.94, "line-dasharray": [1.15, 1.55] } });
-        map.addLayer({ id: "journal-year-route", type: "line", source: yearRouteSourceId, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": ["coalesce", ["get", "color"], "#8D624C"], "line-width": 2.25, "line-opacity": 0.98, "line-dasharray": [1.15, 1.55] } });
-        map.addLayer({ id: "route-flight-icons", type: "symbol", source: flightSourceId, layout: { "icon-image": ["get", "iconImage"], "icon-size": 1.12, "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true } });
-        map.addLayer({ id: "visited-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "visited"], ["!=", ["get", "selected"], true], ["!=", ["get", "relatedToSelectedJourney"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.36, 3, 1.56], "icon-allow-overlap": false, "icon-ignore-placement": false } });
-        map.addLayer({ id: "lived-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "lived"], ["!=", ["get", "selected"], true], ["!=", ["get", "relatedToSelectedJourney"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.42, 3, 1.62], "icon-allow-overlap": false, "icon-ignore-placement": false } });
-        map.addLayer({ id: "related-journey-halo", type: "circle", source: pointSourceId, filter: ["all", ["==", ["get", "relatedToSelectedJourney"], true], ["!=", ["get", "selected"], true]], paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 0.5, 12, 3, 15], "circle-color": "rgba(251, 246, 238, 0.58)", "circle-stroke-color": ["coalesce", ["get", "accentColor"], "#B47A67"], "circle-stroke-opacity": 0.16, "circle-stroke-width": 0.9 } });
-        map.addLayer({ id: "related-journey-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "relatedToSelectedJourney"], true], ["!=", ["get", "selected"], true]], layout: { "icon-image": ["get", "selectedIconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.56, 3, 1.72], "icon-allow-overlap": false, "icon-ignore-placement": false } });
-        map.addLayer({ id: "selected-point-outer-ring", type: "circle", source: pointSourceId, filter: ["==", ["get", "selected"], true], paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 0.5, 16, 3, 18], "circle-color": ["coalesce", ["get", "accentColor"], "#7E5146"], "circle-opacity": 0.16, "circle-blur": 0.16 } });
-        map.addLayer({ id: "selected-point-inner-ring", type: "circle", source: pointSourceId, filter: ["==", ["get", "selected"], true], paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 0.5, 10, 3, 11.5], "circle-color": "#FBF7EF", "circle-stroke-color": ["coalesce", ["get", "accentColor"], "#7E5146"], "circle-stroke-width": 1.8, "circle-stroke-opacity": 0.82 } });
-        map.addLayer({ id: "selected-point-center", type: "circle", source: pointSourceId, filter: ["==", ["get", "selected"], true], paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 0.5, 5.5, 3, 6.5], "circle-color": ["coalesce", ["get", "accentColor"], "#7E5146"], "circle-stroke-color": "#FBF7EF", "circle-stroke-width": 1.2 } });
-        map.addLayer({ id: "selected-icon", type: "symbol", source: pointSourceId, filter: ["==", ["get", "selected"], true], layout: { "icon-image": ["get", "selectedIconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.62, 3, 1.82], "icon-allow-overlap": true } });
+        map.addLayer({ id: "journal-year-route-casing", type: "line", source: yearRouteSourceId, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#FFFDF8", "line-width": 3.35, "line-opacity": 0.94, "line-dasharray": [1.1, 1.35] } });
+        map.addLayer({ id: "journal-year-route", type: "line", source: yearRouteSourceId, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": ["coalesce", ["get", "color"], "#8D624C"], "line-width": 1.72, "line-opacity": 1, "line-dasharray": [1.1, 1.35] } });
+        map.addLayer({ id: "route-flight-icons", type: "symbol", source: flightSourceId, layout: { "icon-image": ["get", "iconImage"], "icon-size": 0.9, "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true } });
+        map.addLayer({ id: "visited-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "visited"], ["!=", ["get", "selected"], true], ["!=", ["get", "relatedToSelectedJourney"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 2.04, 3, 2.34], "icon-allow-overlap": true, "icon-ignore-placement": true } });
+        map.addLayer({ id: "lived-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "lived"], ["!=", ["get", "selected"], true], ["!=", ["get", "relatedToSelectedJourney"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 2.13, 3, 2.43], "icon-allow-overlap": true, "icon-ignore-placement": true } });
+        map.addLayer({ id: "related-journey-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "relatedToSelectedJourney"], true], ["!=", ["get", "selected"], true]], layout: { "icon-image": ["get", "selectedIconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 2.34, 3, 2.58], "icon-allow-overlap": true, "icon-ignore-placement": true } });
+        map.addLayer({ id: "selected-icon", type: "symbol", source: pointSourceId, filter: ["==", ["get", "selected"], true], layout: { "icon-image": ["get", "selectedIconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 2.48, 3, 2.72], "icon-allow-overlap": true, "icon-ignore-placement": true } });
         map.addLayer({ id: "visited-country-labels", type: "symbol", source: visitedCountrySourceId, minzoom: 1.05, layout: { "text-field": ["get", "country"], "text-size": ["interpolate", ["linear"], ["zoom"], 1.05, 8.5, 3, 10], "text-offset": [0, 2.2], "text-anchor": "top", "text-allow-overlap": false }, paint: { "text-color": "#756B61", "text-halo-color": "#FFFDF8", "text-halo-width": 1.1, "text-opacity": 0.76 } });
         map.addLayer({ id: "visited-place-labels", type: "symbol", source: pointSourceId, filter: ["!=", ["get", "selected"], true], minzoom: 2.15, layout: { "text-field": ["get", "title"], "text-size": ["interpolate", ["linear"], ["zoom"], 2.15, 8.5, 4.5, 10], "text-offset": [0, 2.5], "text-anchor": "top", "text-allow-overlap": false }, paint: { "text-color": ["coalesce", ["get", "accentDark"], "#3B342E"], "text-halo-color": "#FFFDF8", "text-halo-width": 1.05, "text-opacity": 0.8 } });
         map.addLayer({ id: "story-preview-dots", type: "circle", source: storyPreviewSourceId, filter: ["!", ["has", "point_count"]], minzoom: 3.3, paint: { "circle-radius": ["case", ["==", ["get", "selected"], true], 8, ["==", ["get", "featured"], true], 6, 5], "circle-color": "rgba(255,253,249,0.78)", "circle-stroke-color": ["coalesce", ["get", "accentColor"], "#8D624C"], "circle-stroke-width": ["case", ["==", ["get", "selected"], true], 1.6, 1], "circle-opacity": ["interpolate", ["linear"], ["zoom"], 3.3, 0.42, 4.8, 0.78] } });
@@ -741,7 +752,17 @@ export function MapView({ places, selectedPlace, selectionRevision, activeYear, 
         lastCameraSelectionRef.current = latestSelectedPlaceRef.current.id;
         positionSelectedPreview(map);
         setMapReady(true);
-      })();
+      } finally {
+        installingAppLayers = false;
+      }
+    };
+    map.on("load", () => {
+      void installAppLayers();
+    });
+    map.on("style.load", () => {
+      // MapLibre discards app sources and layers on setStyle(). Reinstall them
+      // after every style load so endpoint icons never vanish behind the basemap.
+      if (!map.getSource(pointSourceId)) void installAppLayers();
     });
     map.on("styledata", () => {
       scheduleBaseMapStyle();
