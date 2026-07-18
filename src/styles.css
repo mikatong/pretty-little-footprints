@@ -2832,6 +2832,12 @@ img {
     z-index: 2;
     background: transparent;
     border-bottom: 0;
+    pointer-events: none;
+  }
+
+  .hero a,
+  .hero button {
+    pointer-events: auto;
   }
 
   .hero-nav {
