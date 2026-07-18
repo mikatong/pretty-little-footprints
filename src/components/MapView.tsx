@@ -9,6 +9,7 @@ import { getStartTime, hasMeaningfulStoryContent, isStoryImagePath } from "../st
 type MapViewProps = {
   places: Place[];
   selectedPlace: Place;
+  selectionRevision: number;
   activeYear: string;
   meaningfulStories: Place[];
   onSelect: (place: Place) => void;
@@ -150,7 +151,7 @@ const getIconSvg = (iconType: MapIconType, accent: PlaceAccent, state: "lived" |
 };
 
 const getFlightSvg = (color: string) => {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><path d="M5 25 20 21 28 7l4 1-4 14 14 6-1 4-17-3-8 9-4-1 4-10-11 1z" fill="${color}" stroke="#FFFDF8" stroke-width="1.15" stroke-linejoin="round"/><path d="m20 21 8 1M24 29l4-7" fill="none" stroke="#FFFDF8" stroke-width="1" stroke-linecap="round" opacity=".86"/></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 48 48"><path d="M5 25 20 21 28 7l4 1-4 14 14 6-1 4-17-3-8 9-4-1 4-10-11 1z" fill="${color}" stroke="#FFFDF8" stroke-width="1.35" stroke-linejoin="round"/><path d="m20 21 8 1M24 29l4-7" fill="none" stroke="#FFFDF8" stroke-width="1.05" stroke-linecap="round" opacity=".9"/></svg>`;
 };
 
 const loadSvgImage = (svg: string, size = 48) => {
@@ -187,7 +188,7 @@ const registerMapIcons = async (map: maplibregl.Map, places: Place[]) => {
   await Promise.all(routeColors.map(async ([year, color]) => {
     const name = flightIconName(year);
     if (map.hasImage(name)) return;
-    map.addImage(name, await loadSvgImage(getFlightSvg(color), 32), { pixelRatio: 2 });
+    map.addImage(name, await loadSvgImage(getFlightSvg(color), 64), { pixelRatio: 2 });
   }));
 };
 
@@ -578,10 +579,11 @@ const styleBaseMap = (map: maplibregl.Map) => {
   }
 };
 
-export function MapView({ places, selectedPlace, activeYear, meaningfulStories, onSelect }: MapViewProps) {
+export function MapView({ places, selectedPlace, selectionRevision, activeYear, meaningfulStories, onSelect }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const lastCameraSelectionRef = useRef<string | null>(null);
+  const lastSelectionRevisionRef = useRef(selectionRevision);
   const [mapReady, setMapReady] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(true);
   const [previewPosition, setPreviewPosition] = useState<{ left: number; top: number } | null>(null);
@@ -671,6 +673,25 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
     map.setMaxZoom(7.5);
     map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    map.addControl({
+      onAdd(controlMap) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "map-home-control";
+        button.setAttribute("aria-label", "Return to world atlas view");
+        button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3.5 10 8.5-7 8.5 7v10h-17z"/><path d="M9.5 20v-6h5v6"/></svg>';
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          controlMap.easeTo({ center: worldCenter, zoom: getWorldZoom(), duration: 650, essential: true });
+        });
+        const container = document.createElement("div");
+        container.className = "maplibregl-ctrl maplibregl-ctrl-group";
+        container.append(button);
+        return container;
+      },
+      onRemove() {},
+    }, "top-right");
     map.on("load", () => {
       void (async () => {
         styleBaseMap(map);
@@ -687,7 +708,7 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
         map.addSource(visitedCountrySourceId, { type: "geojson", data: emptyFeatureCollection });
         map.addLayer({ id: "journal-year-route-casing", type: "line", source: yearRouteSourceId, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#FBF7EF", "line-width": 4.3, "line-opacity": 0.94, "line-dasharray": [1.15, 1.55] } });
         map.addLayer({ id: "journal-year-route", type: "line", source: yearRouteSourceId, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": ["coalesce", ["get", "color"], "#8D624C"], "line-width": 2.25, "line-opacity": 0.98, "line-dasharray": [1.15, 1.55] } });
-        map.addLayer({ id: "route-flight-icons", type: "symbol", source: flightSourceId, layout: { "icon-image": ["get", "iconImage"], "icon-size": 0.94, "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true } });
+        map.addLayer({ id: "route-flight-icons", type: "symbol", source: flightSourceId, layout: { "icon-image": ["get", "iconImage"], "icon-size": 1.12, "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true } });
         map.addLayer({ id: "visited-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "visited"], ["!=", ["get", "selected"], true], ["!=", ["get", "relatedToSelectedJourney"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.36, 3, 1.56], "icon-allow-overlap": false, "icon-ignore-placement": false } });
         map.addLayer({ id: "lived-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "lived"], ["!=", ["get", "selected"], true], ["!=", ["get", "relatedToSelectedJourney"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.42, 3, 1.62], "icon-allow-overlap": false, "icon-ignore-placement": false } });
         map.addLayer({ id: "related-journey-halo", type: "circle", source: pointSourceId, filter: ["all", ["==", ["get", "relatedToSelectedJourney"], true], ["!=", ["get", "selected"], true]], paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 0.5, 12, 3, 15], "circle-color": "rgba(251, 246, 238, 0.58)", "circle-stroke-color": ["coalesce", ["get", "accentColor"], "#B47A67"], "circle-stroke-opacity": 0.16, "circle-stroke-width": 0.9 } });
@@ -763,13 +784,19 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
-    if (lastCameraSelectionRef.current === selectedPlace.id) return;
+    const selectionChanged = lastCameraSelectionRef.current !== selectedPlace.id;
+    if (!selectionChanged && lastSelectionRevisionRef.current === selectionRevision) return;
     lastCameraSelectionRef.current = selectedPlace.id;
+    lastSelectionRevisionRef.current = selectionRevision;
     setPreviewOpen(true);
     applyLatestMapData(map);
-    focusSelectedPlace(map, selectedPlace, 650);
-    map.once("moveend", () => positionSelectedPreview(map));
-  }, [applyLatestMapData, selectedPlace, mapReady, positionSelectedPreview]);
+    if (selectionChanged) {
+      focusSelectedPlace(map, selectedPlace, 650);
+      map.once("moveend", () => positionSelectedPreview(map));
+    } else {
+      positionSelectedPreview(map);
+    }
+  }, [applyLatestMapData, selectedPlace, selectionRevision, mapReady, positionSelectedPreview]);
 
   const selectedStory = selectedPlace.story;
   const selectedPreviewImage = selectedStory?.previewImage ?? selectedStory?.coverImage ?? selectedPlace.photo;
@@ -780,7 +807,7 @@ export function MapView({ places, selectedPlace, activeYear, meaningfulStories, 
       <div ref={containerRef} className="map-view" aria-label="Interactive travel footprint map" />
       {previewOpen ? (
         <aside className="map-selected-preview-overlay" style={previewPosition ? { left: previewPosition.left, top: previewPosition.top, right: "auto", bottom: "auto" } : undefined} aria-label={`${selectedPlace.name} story preview`}>
-          <button className="map-selected-preview-close" type="button" onClick={() => setPreviewOpen(false)} aria-label="Close story preview">×</button>
+          <button className="map-selected-preview-close" type="button" onPointerDown={(event: Event) => event.stopPropagation()} onClick={(event: Event) => { event.preventDefault(); event.stopPropagation(); setPreviewOpen(false); }} aria-label="Close story preview">×</button>
           <div className="map-selected-preview">
             {selectedPreviewImage ? <img src={selectedPreviewImage} alt="" /> : null}
             <div>

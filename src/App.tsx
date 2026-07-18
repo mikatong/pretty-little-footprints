@@ -154,7 +154,6 @@ function TimelineInlinePreview({ place }: { place: Place }) {
       {previewImage ? <img src={previewImage} alt={`${place.name} story preview`} /> : <PlaceGlyph place={place} className="timeline-preview-glyph" />}
       <span>
         <small>{place.dateLabel} · {place.country}</small>
-        <strong>{place.story.title ?? place.name}</strong>
         {previewText ? <em>{previewText}</em> : null}
         <b>Read story →</b>
       </span>
@@ -1132,6 +1131,7 @@ export default function App() {
   const initialPlace = storedSelectedPlace ?? latestFeaturedPlace ?? timelinePlaces.find((place) => getStartYear(place) === latestYear) ?? timelinePlaces[0] ?? places[0];
   // The place id is the single selection source for the timeline, map, routes, and story rail.
   const [selectedPlaceId, setSelectedPlaceId] = useState(initialPlace.id);
+  const [selectionRevision, setSelectionRevision] = useState(0);
   const [activeYear, setActiveYear] = useState(() => getStartYear(initialPlace));
   const [mapOpen, setMapOpen] = useState(false);
   const [expandedYears, setExpandedYears] = useState<Set<string>>(() => new Set([latestYear]));
@@ -1256,6 +1256,7 @@ export default function App() {
     window.sessionStorage.setItem(selectedPlaceStorageKey, place.id);
     setActiveYear(getStartYear(place));
     setSelectedPlaceId(place.id);
+    setSelectionRevision((current: number) => current + 1);
   }, []);
 
   const handleSignOut = useCallback(() => {
@@ -1398,6 +1399,7 @@ export default function App() {
             <MapView
               places={visiblePlaces}
               selectedPlace={selectedVisiblePlace}
+              selectionRevision={selectionRevision}
               activeYear={activeYear}
               meaningfulStories={meaningfulStories}
               onSelect={handleSelectPlace}
