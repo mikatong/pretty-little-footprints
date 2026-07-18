@@ -2915,4 +2915,8 @@ img {
     padding: 11px clamp(18px, 2vw, 34px);
     overflow: hidden;
   }
+
+  .timeline-item[style] .timeline-dot {
+    background: var(--place-accent) !important;
+  }
 }

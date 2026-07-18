@@ -404,7 +404,8 @@ const getFlightFeatures = (coordinates: [number, number][], year: string) => coo
   const to = coordinates[index + 1];
   // A plane belongs to every segment that has sufficient visual breathing room,
   // not only to transcontinental legs.
-  if (getDistanceKm(from, to) < 260) return [];
+  const distanceKm = getDistanceKm(from, to);
+  if (distanceKm < 260) return [];
   const curve = getCurvedSegment(from, to, index);
   const midpoint = curve[Math.floor(curve.length / 2)];
   const earlier = curve[Math.max(0, Math.floor(curve.length * 0.46))];
@@ -413,7 +414,13 @@ const getFlightFeatures = (coordinates: [number, number][], year: string) => coo
   return [{
     type: "Feature" as const,
     // The SVG nose points east at zero rotation; MapLibre bearings are north-up.
-    properties: { colorKey: color, iconImage: flightIconName(color), bearing: getBearing(earlier, later) - 90 },
+    properties: {
+      colorKey: color,
+      iconImage: flightIconName(color),
+      bearing: getBearing(earlier, later) - 90,
+      worldFlight: distanceKm >= 3500,
+      regionalFlight: distanceKm >= 900 || index % 3 === 0,
+    },
     geometry: { type: "Point" as const, coordinates: midpoint },
   }];
 });
@@ -544,7 +551,7 @@ const softenBaseMapLayer = (map: maplibregl.Map, layer: maplibregl.LayerSpecific
 const runtimeMapDiagnostics = (map: maplibregl.Map) => {
   const layers = map.getStyle().layers ?? [];
   const layerIds = new Set(layers.map((layer) => layer.id));
-  const requiredLayers = ["journal-year-route", "route-flight-icons", "visited-place-labels"];
+  const requiredLayers = ["journal-year-route", "route-flight-icons-world", "visited-place-labels"];
   const oceanLayers = layers.filter((layer) => layer.type === "symbol" && /(marine|ocean|sea|water_name)/.test(layerText(layer)));
   const landWaterLayers = layers.filter((layer) => layer.type === "background" || (layer.type === "fill" && /(water|land|earth|landcover|landuse)/.test(layerText(layer))));
   return {
@@ -703,12 +710,14 @@ export function MapView({ places, selectedPlace, selectionRevision, activeYear, 
         map.addSource(pointSourceId, { type: "geojson", data: emptyFeatureCollection });
         map.addLayer({ id: "journal-year-route-casing", type: "line", source: yearRouteSourceId, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#FFFDF8", "line-width": 3.35, "line-opacity": 0.94, "line-dasharray": [1.1, 1.35] } });
         map.addLayer({ id: "journal-year-route", type: "line", source: yearRouteSourceId, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": ["coalesce", ["get", "color"], "#8D624C"], "line-width": 1.72, "line-opacity": 1, "line-dasharray": [1.1, 1.35] } });
-        map.addLayer({ id: "route-flight-icons", type: "symbol", source: flightSourceId, layout: { "icon-image": ["get", "iconImage"], "icon-size": 0.87, "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true } });
+        map.addLayer({ id: "route-flight-icons-world", type: "symbol", source: flightSourceId, filter: ["==", ["get", "worldFlight"], true], layout: { "icon-image": ["get", "iconImage"], "icon-size": 0.87, "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true } });
+        map.addLayer({ id: "route-flight-icons-regional", type: "symbol", source: flightSourceId, minzoom: 1.85, filter: ["all", ["!=", ["get", "worldFlight"], true], ["==", ["get", "regionalFlight"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": 0.87, "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true } });
+        map.addLayer({ id: "route-flight-icons-detail", type: "symbol", source: flightSourceId, minzoom: 3.3, filter: ["all", ["!=", ["get", "worldFlight"], true], ["!=", ["get", "regionalFlight"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": 0.87, "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true } });
         // The opening atlas is intentionally representative: close destinations
         // enter only at deeper zoom, then still respect symbol collisions.
         map.addLayer({ id: "visited-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "visited"], ["!=", ["get", "selected"], true], ["!", ["get", "relatedToSelectedJourney"]], ["==", ["get", "worldDestination"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.68, 2.3, 1.888], "icon-allow-overlap": false, "icon-ignore-placement": false, "symbol-sort-key": 3 } });
         map.addLayer({ id: "visited-secondary-icons", type: "symbol", source: pointSourceId, minzoom: 2.35, filter: ["all", ["==", ["get", "locationType"], "visited"], ["!=", ["get", "selected"], true], ["!", ["get", "relatedToSelectedJourney"]], ["==", ["get", "majorDestination"], true], ["!", ["get", "worldDestination"]]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 2.35, 1.472, 4.2, 1.696], "icon-allow-overlap": false, "icon-ignore-placement": false, "symbol-sort-key": 2 } });
-        map.addLayer({ id: "visited-detail-icons", type: "symbol", source: pointSourceId, minzoom: 4.35, filter: ["all", ["==", ["get", "locationType"], "visited"], ["!=", ["get", "selected"], true], ["!", ["get", "relatedToSelectedJourney"]], ["!", ["get", "majorDestination"]]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 4.35, 1.184, 6.2, 1.504], "icon-allow-overlap": false, "icon-ignore-placement": false, "symbol-sort-key": ["case", ["==", ["get", "secondaryDestination"], true], 1, 0] } });
+        map.addLayer({ id: "visited-detail-icons", type: "symbol", source: pointSourceId, minzoom: 3.3, filter: ["all", ["==", ["get", "locationType"], "visited"], ["!=", ["get", "selected"], true], ["!", ["get", "relatedToSelectedJourney"]], ["!", ["get", "majorDestination"]]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 3.3, 1.184, 6.2, 1.504], "icon-allow-overlap": false, "icon-ignore-placement": false, "symbol-sort-key": ["case", ["==", ["get", "secondaryDestination"], true], 1, 0] } });
         map.addLayer({ id: "lived-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "lived"], ["!=", ["get", "selected"], true], ["!", ["get", "relatedToSelectedJourney"]], ["==", ["get", "worldDestination"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.728, 2.3, 1.952], "icon-allow-overlap": false, "icon-ignore-placement": false, "symbol-sort-key": 3 } });
         map.addLayer({ id: "lived-secondary-icons", type: "symbol", source: pointSourceId, minzoom: 2.35, filter: ["all", ["==", ["get", "locationType"], "lived"], ["!=", ["get", "selected"], true], ["!", ["get", "relatedToSelectedJourney"]], ["!", ["get", "worldDestination"]]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 2.35, 1.44, 4.2, 1.664], "icon-allow-overlap": false, "icon-ignore-placement": false, "symbol-sort-key": 2 } });
         map.addLayer({ id: "related-journey-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "relatedToSelectedJourney"], true], ["!=", ["get", "selected"], true]], layout: { "icon-image": ["get", "selectedIconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.84, 3, 2.08], "icon-allow-overlap": true, "icon-ignore-placement": true } });
