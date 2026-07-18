@@ -2883,8 +2883,8 @@ img {
 
   .map-panel {
     z-index: 0;
-    margin-top: -78px;
-    clip-path: polygon(21% 0, 100% 0, 100% 100%, 0 100%);
+    margin-top: 0;
+    clip-path: none;
     border-bottom: 1px solid var(--border);
   }
 
