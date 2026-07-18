@@ -1401,7 +1401,6 @@ export default function App() {
               selectedPlace={selectedVisiblePlace}
               selectionRevision={selectionRevision}
               activeYear={activeYear}
-              meaningfulStories={meaningfulStories}
               onSelect={handleSelectPlace}
             />
           </div>

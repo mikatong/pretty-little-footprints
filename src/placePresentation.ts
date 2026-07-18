@@ -76,3 +76,9 @@ export const isMajorDestination = (place: Place, point?: MapPoint | Place) => {
   const text = textFor(place, point);
   return /(chengdu|beijing|shanghai|seoul|tokyo|canggu|ubud|bali|patagonia|antarctica|machu|lima|paris|london|new-york|san-francisco|palo-alto|vancouver|iceland)/.test(text);
 };
+
+/** A deliberately smaller landmark set for the opening atlas view. */
+export const isWorldAtlasDestination = (place: Place, point?: MapPoint | Place) => {
+  const text = textFor(place, point);
+  return /(chengdu|beijing|tokyo|canggu|antarctica|patagonia|machu|paris|london|new-york|san-francisco|vancouver|iceland)/.test(text);
+};
