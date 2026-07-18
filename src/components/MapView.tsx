@@ -370,6 +370,30 @@ const getCurvedRouteCoordinates = (coordinates: [number, number][]) => {
   });
 };
 
+// Route strokes deliberately stop short of each destination. This keeps the
+// landmark illustration centered on its location without a line cutting
+// through the artwork, even when a journey arrives and departs from one point.
+const getTrimmedRouteSegment = (from: [number, number], to: [number, number], segmentIndex: number, endpointGapKm = 260) => {
+  const curve = getCurvedSegment(from, to, segmentIndex);
+  if (curve.length < 3 || getDistanceKm(from, to) <= endpointGapKm * 2) return null;
+
+  let startIndex = 0;
+  let startDistance = 0;
+  while (startIndex < curve.length - 1 && startDistance < endpointGapKm) {
+    startDistance += getDistanceKm(curve[startIndex], curve[startIndex + 1]);
+    startIndex += 1;
+  }
+
+  let endIndex = curve.length - 1;
+  let endDistance = 0;
+  while (endIndex > startIndex && endDistance < endpointGapKm) {
+    endDistance += getDistanceKm(curve[endIndex], curve[endIndex - 1]);
+    endIndex -= 1;
+  }
+
+  return endIndex - startIndex >= 1 ? curve.slice(startIndex, endIndex + 1) : null;
+};
+
 const getSegmentColor = (year: string, segmentIndex: number) => {
   const yearColor = yearRouteColors[year] ?? "#8D624C";
   const startIndex = routePalette.indexOf(yearColor);
@@ -419,11 +443,14 @@ const getYearRouteFeatureCollection = (places: Place[], activeYear: string) => {
         .filter((point): point is ValidPoint => Boolean(point))
         .map((point) => point.coordinates);
       if (coordinates.length < 2) return [];
-      return coordinates.slice(0, -1).map((from, index) => ({
-        type: "Feature" as const,
-        properties: { id: `${year}-${index}`, year, color: getSegmentColor(year, index) },
-        geometry: { type: "LineString" as const, coordinates: getCurvedSegment(from, coordinates[index + 1], index) },
-      }));
+      return coordinates.slice(0, -1).flatMap((from, index) => {
+        const routeCoordinates = getTrimmedRouteSegment(from, coordinates[index + 1], index);
+        return routeCoordinates ? [{
+          type: "Feature" as const,
+          properties: { id: `${year}-${index}`, year, color: getSegmentColor(year, index) },
+          geometry: { type: "LineString" as const, coordinates: routeCoordinates },
+        }] : [];
+      });
     }),
   };
 };
@@ -676,16 +703,16 @@ export function MapView({ places, selectedPlace, selectionRevision, activeYear, 
         map.addSource(pointSourceId, { type: "geojson", data: emptyFeatureCollection });
         map.addLayer({ id: "journal-year-route-casing", type: "line", source: yearRouteSourceId, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#FFFDF8", "line-width": 3.35, "line-opacity": 0.94, "line-dasharray": [1.1, 1.35] } });
         map.addLayer({ id: "journal-year-route", type: "line", source: yearRouteSourceId, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": ["coalesce", ["get", "color"], "#8D624C"], "line-width": 1.72, "line-opacity": 1, "line-dasharray": [1.1, 1.35] } });
-        map.addLayer({ id: "route-flight-icons", type: "symbol", source: flightSourceId, layout: { "icon-image": ["get", "iconImage"], "icon-size": 0.58, "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true } });
+        map.addLayer({ id: "route-flight-icons", type: "symbol", source: flightSourceId, layout: { "icon-image": ["get", "iconImage"], "icon-size": 0.87, "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true } });
         // The opening atlas is intentionally representative: close destinations
         // enter only at deeper zoom, then still respect symbol collisions.
-        map.addLayer({ id: "visited-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "visited"], ["!=", ["get", "selected"], true], ["!", ["get", "relatedToSelectedJourney"]], ["==", ["get", "worldDestination"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.05, 2.3, 1.18], "icon-allow-overlap": false, "icon-ignore-placement": false, "symbol-sort-key": 3 } });
-        map.addLayer({ id: "visited-secondary-icons", type: "symbol", source: pointSourceId, minzoom: 2.35, filter: ["all", ["==", ["get", "locationType"], "visited"], ["!=", ["get", "selected"], true], ["!", ["get", "relatedToSelectedJourney"]], ["==", ["get", "majorDestination"], true], ["!", ["get", "worldDestination"]]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 2.35, 0.92, 4.2, 1.06], "icon-allow-overlap": false, "icon-ignore-placement": false, "symbol-sort-key": 2 } });
-        map.addLayer({ id: "visited-detail-icons", type: "symbol", source: pointSourceId, minzoom: 4.35, filter: ["all", ["==", ["get", "locationType"], "visited"], ["!=", ["get", "selected"], true], ["!", ["get", "relatedToSelectedJourney"]], ["!", ["get", "majorDestination"]]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 4.35, 0.74, 6.2, 0.94], "icon-allow-overlap": false, "icon-ignore-placement": false, "symbol-sort-key": ["case", ["==", ["get", "secondaryDestination"], true], 1, 0] } });
-        map.addLayer({ id: "lived-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "lived"], ["!=", ["get", "selected"], true], ["!", ["get", "relatedToSelectedJourney"]], ["==", ["get", "worldDestination"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.08, 2.3, 1.22], "icon-allow-overlap": false, "icon-ignore-placement": false, "symbol-sort-key": 3 } });
-        map.addLayer({ id: "lived-secondary-icons", type: "symbol", source: pointSourceId, minzoom: 2.35, filter: ["all", ["==", ["get", "locationType"], "lived"], ["!=", ["get", "selected"], true], ["!", ["get", "relatedToSelectedJourney"]], ["!", ["get", "worldDestination"]]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 2.35, 0.9, 4.2, 1.04], "icon-allow-overlap": false, "icon-ignore-placement": false, "symbol-sort-key": 2 } });
-        map.addLayer({ id: "related-journey-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "relatedToSelectedJourney"], true], ["!=", ["get", "selected"], true]], layout: { "icon-image": ["get", "selectedIconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.15, 3, 1.3], "icon-allow-overlap": true, "icon-ignore-placement": true } });
-        map.addLayer({ id: "selected-icon", type: "symbol", source: pointSourceId, filter: ["==", ["get", "selected"], true], layout: { "icon-image": ["get", "selectedIconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 1.22, 3, 1.38], "icon-allow-overlap": true, "icon-ignore-placement": true } });
+        map.addLayer({ id: "visited-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "visited"], ["!=", ["get", "selected"], true], ["!", ["get", "relatedToSelectedJourney"]], ["==", ["get", "worldDestination"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 2.1, 2.3, 2.36], "icon-allow-overlap": false, "icon-ignore-placement": false, "symbol-sort-key": 3 } });
+        map.addLayer({ id: "visited-secondary-icons", type: "symbol", source: pointSourceId, minzoom: 2.35, filter: ["all", ["==", ["get", "locationType"], "visited"], ["!=", ["get", "selected"], true], ["!", ["get", "relatedToSelectedJourney"]], ["==", ["get", "majorDestination"], true], ["!", ["get", "worldDestination"]]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 2.35, 1.84, 4.2, 2.12], "icon-allow-overlap": false, "icon-ignore-placement": false, "symbol-sort-key": 2 } });
+        map.addLayer({ id: "visited-detail-icons", type: "symbol", source: pointSourceId, minzoom: 4.35, filter: ["all", ["==", ["get", "locationType"], "visited"], ["!=", ["get", "selected"], true], ["!", ["get", "relatedToSelectedJourney"]], ["!", ["get", "majorDestination"]]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 4.35, 1.48, 6.2, 1.88], "icon-allow-overlap": false, "icon-ignore-placement": false, "symbol-sort-key": ["case", ["==", ["get", "secondaryDestination"], true], 1, 0] } });
+        map.addLayer({ id: "lived-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "locationType"], "lived"], ["!=", ["get", "selected"], true], ["!", ["get", "relatedToSelectedJourney"]], ["==", ["get", "worldDestination"], true]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 2.16, 2.3, 2.44], "icon-allow-overlap": false, "icon-ignore-placement": false, "symbol-sort-key": 3 } });
+        map.addLayer({ id: "lived-secondary-icons", type: "symbol", source: pointSourceId, minzoom: 2.35, filter: ["all", ["==", ["get", "locationType"], "lived"], ["!=", ["get", "selected"], true], ["!", ["get", "relatedToSelectedJourney"]], ["!", ["get", "worldDestination"]]], layout: { "icon-image": ["get", "iconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 2.35, 1.8, 4.2, 2.08], "icon-allow-overlap": false, "icon-ignore-placement": false, "symbol-sort-key": 2 } });
+        map.addLayer({ id: "related-journey-icons", type: "symbol", source: pointSourceId, filter: ["all", ["==", ["get", "relatedToSelectedJourney"], true], ["!=", ["get", "selected"], true]], layout: { "icon-image": ["get", "selectedIconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 2.3, 3, 2.6], "icon-allow-overlap": true, "icon-ignore-placement": true } });
+        map.addLayer({ id: "selected-icon", type: "symbol", source: pointSourceId, filter: ["==", ["get", "selected"], true], layout: { "icon-image": ["get", "selectedIconImage"], "icon-size": ["interpolate", ["linear"], ["zoom"], 0.5, 2.44, 3, 2.76], "icon-allow-overlap": true, "icon-ignore-placement": true } });
         map.addLayer({ id: "visited-place-labels", type: "symbol", source: pointSourceId, filter: ["all", ["!=", ["get", "selected"], true], ["==", ["get", "worldDestination"], true]], minzoom: 2.9, layout: { "text-field": ["get", "title"], "text-size": ["interpolate", ["linear"], ["zoom"], 2.9, 8.5, 4.8, 10], "text-offset": [0, 2.35], "text-anchor": "top", "text-allow-overlap": false }, paint: { "text-color": ["coalesce", ["get", "accentDark"], "#3B342E"], "text-halo-color": "#FFFDF8", "text-halo-width": 1.05, "text-opacity": 0.8 } });
         map.addLayer({ id: "selected-place-labels", type: "symbol", source: pointSourceId, minzoom: 2.2, filter: ["==", ["get", "selected"], true], layout: { "text-field": ["get", "title"], "text-size": 10.5, "text-offset": [1.42, 0], "text-anchor": "left", "text-allow-overlap": true, "text-ignore-placement": true }, paint: { "text-color": ["coalesce", ["get", "accentDark"], "#2c241f"], "text-halo-color": "#FBF7EF", "text-halo-width": 1, "text-opacity": 0.82 } });
         const clickableLayers = ["visited-icons", "visited-secondary-icons", "visited-detail-icons", "lived-icons", "lived-secondary-icons", "related-journey-icons", "selected-icon"];
