@@ -2818,3 +2818,83 @@ img {
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--place-accent, var(--accent)) 16%, transparent);
   }
 }
+
+/* One-screen homepage composition: the map and story shelf share the right
+   panel, with a restrained atlas wedge extending into the unused header area. */
+@media (min-width: 761px) {
+  .app-shell {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .hero {
+    z-index: 2;
+    background: transparent;
+  }
+
+  .hero-nav {
+    grid-template-columns: minmax(510px, 1fr) minmax(360px, .88fr);
+  }
+
+  .atlas-badge {
+    display: none;
+  }
+
+  .hero-links {
+    grid-column: 2 !important;
+  }
+
+  .atlas-layout {
+    height: calc(100dvh - clamp(154px, 18.8vh, 188px));
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .timeline-panel {
+    grid-column: 1;
+    grid-row: 1;
+    max-height: none;
+    position: static;
+  }
+
+  .map-section {
+    position: relative;
+    z-index: 1;
+    grid-column: 2;
+    grid-row: 1;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) clamp(172px, 19.2vh, 206px);
+    min-height: 0;
+  }
+
+  .map-section::before {
+    position: absolute;
+    z-index: 0;
+    top: -78px;
+    right: 0;
+    left: 19%;
+    height: 78px;
+    background: #F0E6D5;
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+    content: "";
+  }
+
+  .map-panel,
+  .story-panel {
+    position: relative;
+    z-index: 1;
+    grid-column: auto;
+    grid-row: auto;
+    min-height: 0;
+  }
+
+  .map-panel {
+    border-bottom: 1px solid var(--border);
+  }
+
+  .story-panel {
+    padding: 11px clamp(18px, 2vw, 34px);
+    overflow: hidden;
+  }
+}
