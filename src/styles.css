@@ -2845,6 +2845,17 @@ img {
     grid-column: 2 !important;
   }
 
+  .hero-stats {
+    gap: 15px;
+    margin-left: -42px;
+    padding-left: 0;
+  }
+
+  .hero-stats div {
+    gap: 8px;
+    padding-right: 15px;
+  }
+
   .atlas-layout {
     height: calc(100dvh - clamp(154px, 18.8vh, 188px));
     min-height: 0;
@@ -2883,7 +2894,9 @@ img {
 
   .map-panel {
     z-index: 0;
-    margin-top: 0;
+    /* Use the otherwise empty header area for the live map, while keeping
+       its top edge below the Pretty Little Maps title. */
+    margin-top: -92px;
     clip-path: none;
     border-bottom: 1px solid var(--border);
   }
