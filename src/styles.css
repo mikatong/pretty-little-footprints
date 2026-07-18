@@ -2894,9 +2894,11 @@ img {
 
   .map-panel {
     z-index: 0;
-    /* Use the otherwise empty header area for the live map, while keeping
-       its top edge below the Pretty Little Maps title. */
-    margin-top: -92px;
+    /* Fill the complete map row plus the reserved header extension. The
+       resulting live map starts below the title and ends at the story shelf. */
+    align-self: start;
+    height: calc(100% + 70px);
+    margin-top: -70px;
     clip-path: none;
     border-bottom: 1px solid var(--border);
   }
