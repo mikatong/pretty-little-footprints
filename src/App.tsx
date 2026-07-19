@@ -5,6 +5,7 @@ import { MapView } from "./components/MapView";
 import { PlaceCard } from "./components/PlaceCard";
 import { PlaceGlyph } from "./components/PlaceGlyph";
 import { StoryPage } from "./components/StoryPage";
+import { IconSystemPreview } from "./components/IconSystemPreview";
 import { places } from "./data/places";
 import { stories } from "./data/stories";
 import {
@@ -89,6 +90,10 @@ function isUploadPath(pathname = window.location.pathname) {
 
 function isLoginPath(pathname = window.location.pathname) {
   return pathname.replace(/\/$/, "") === "/login";
+}
+
+function isIconSystemPath(pathname = window.location.pathname) {
+  return pathname.replace(/\/$/, "") === "/icon-system";
 }
 
 function getComposeSlugFromPath(pathname = window.location.pathname) {
@@ -1129,6 +1134,7 @@ export default function App() {
   const storySlug = useMemo(() => getStorySlugFromPath(), [routePath]);
   const composeSlug = useMemo(() => getComposeSlugFromPath(routePath), [routePath]);
   const loginPath = useMemo(() => isLoginPath(routePath), [routePath]);
+  const iconSystemPath = useMemo(() => isIconSystemPath(routePath), [routePath]);
   const useCloudComposer = isSupabaseConfigured;
   const visiblePlaces = useMemo(() => {
     return cloudStoriesAvailable ? mergeCloudStories(timelinePlaces, cloudStories, hiddenCloudDraftPlaceIds, hiddenCloudDraftSlugs) : timelinePlaces;
@@ -1261,6 +1267,10 @@ export default function App() {
 
   if (isUploadPath(routePath)) {
     return <UploadPage />;
+  }
+
+  if (iconSystemPath) {
+    return <IconSystemPreview />;
   }
 
   if (loginPath) {
