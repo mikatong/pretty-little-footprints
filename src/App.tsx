@@ -5,6 +5,7 @@ import { MapView } from "./components/MapView";
 import { PlaceCard } from "./components/PlaceCard";
 import { PlaceGlyph } from "./components/PlaceGlyph";
 import { StoryPage } from "./components/StoryPage";
+import { StoryPreviewImage } from "./components/StoryPreviewImage";
 import { IconSystemPreview } from "./components/IconSystemPreview";
 import { places } from "./data/places";
 import { stories } from "./data/stories";
@@ -156,7 +157,7 @@ function TimelineInlinePreview({ place }: { place: Place }) {
       href={`/stories/${place.story.slug}`}
       style={{ "--place-accent": accent.primary, "--place-accent-pale": accent.pale } as Record<string, string>}
     >
-      {previewImage ? <img src={previewImage} alt={`${place.name} story preview`} /> : <PlaceGlyph place={place} className="timeline-preview-glyph" />}
+      {previewImage ? <StoryPreviewImage place={place} src={previewImage} alt={`${place.name} story preview`} /> : <PlaceGlyph place={place} className="timeline-preview-glyph" />}
       <span>
         <small>{place.dateLabel} · {place.country}</small>
         {previewText ? <em>{previewText}</em> : null}
@@ -284,13 +285,22 @@ function AtlasStoryRail({
       <div className="rail-story-cards" aria-label="Featured stories">
         {railPlaces.map((place) => {
           const image = place.story?.previewImage ?? place.story?.coverImage ?? place.photo;
-          return (
-            <button className={`rail-story-card${place.id === selectedPlace.id ? " selected" : ""}`} key={place.id} type="button" onClick={() => onSelect(place)} aria-current={place.id === selectedPlace.id ? "true" : undefined}>
+          const cardClassName = `rail-story-card${place.id === selectedPlace.id ? " selected" : ""}`;
+          const cardContents = <>
               <span className="rail-card-image">
-                {image ? <img src={image} alt={`${place.name} travel memory`} loading="lazy" decoding="async" /> : <PlaceGlyph place={place} />}
+                {image ? <StoryPreviewImage place={place} src={image} alt={`${place.name} travel memory`} loading="lazy" decoding="async" /> : <PlaceGlyph place={place} />}
               </span>
               <strong>{place.story?.title ?? place.name}</strong>
               <small>{place.country}</small>
+            </>;
+
+          return place.story ? (
+            <a className={cardClassName} key={place.id} href={`/stories/${place.story.slug}`} onClick={() => onSelect(place)} aria-current={place.id === selectedPlace.id ? "true" : undefined}>
+              {cardContents}
+            </a>
+          ) : (
+            <button className={cardClassName} key={place.id} type="button" onClick={() => onSelect(place)} aria-current={place.id === selectedPlace.id ? "true" : undefined}>
+              {cardContents}
             </button>
           );
         })}

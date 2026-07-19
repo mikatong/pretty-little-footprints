@@ -433,6 +433,7 @@ img {
   gap: 6px;
   padding: 0 0 10px;
   text-align: left;
+  text-decoration: none;
 }
 
 .rail-story-card strong,

@@ -5,6 +5,7 @@ import type { MapIconType, MapPoint, Place } from "../types";
 import { getPlaceAccent, getPlaceIconType, isMajorDestination, isWorldAtlasDestination, type PlaceAccent } from "../placePresentation";
 import { placeIconKeyByPlaceId } from "../placeIconRegistry";
 import { getStartTime } from "../storyUtils";
+import { StoryPreviewImage } from "./StoryPreviewImage";
 
 type MapViewProps = {
   places: Place[];
@@ -813,7 +814,7 @@ export function MapView({ places, selectedPlace, selectionRevision, activeYear, 
         <aside className="map-selected-preview-overlay" style={previewPosition ? { left: previewPosition.left, top: previewPosition.top, right: "auto", bottom: "auto" } : undefined} aria-label={`${selectedPlace.name} story preview`}>
           <button className="map-selected-preview-close" type="button" onPointerDown={(event: Event) => event.stopPropagation()} onClick={(event: Event) => { event.preventDefault(); event.stopPropagation(); setPreviewOpen(false); }} aria-label="Close story preview">×</button>
           <div className="map-selected-preview">
-            {selectedPreviewImage ? <img src={selectedPreviewImage} alt="" /> : null}
+            {selectedPreviewImage ? <StoryPreviewImage place={selectedPlace} src={selectedPreviewImage} alt="" /> : null}
             <div>
               <small>{selectedPlace.dateLabel}</small>
               <strong>{selectedStory?.title ?? selectedPlace.name}</strong>
