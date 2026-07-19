@@ -109,8 +109,8 @@ const getIconSvg = (iconType: MapIconType, accent: PlaceAccent, state: "lived" |
   const stroke = selected ? accent.dark : lived ? accent.dark : accent.primary;
   const fill = selected || lived ? accent.pale : "#FFFDFC";
   const opacity = selected ? "1" : "0.93";
-  const common = `fill="${fill}" stroke="${stroke}" stroke-width="2.05" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"`;
-  const line = `fill="none" stroke="${stroke}" stroke-width="2.05" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"`;
+  const common = `fill="${fill}" stroke="${stroke}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"`;
+  const line = `fill="none" stroke="${stroke}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"`;
   // Keep the selected location gently anchored, but leave regular destinations
   // as clean editorial illustrations rather than icon-in-a-bubble badges.
   const bg = "";
@@ -513,6 +513,7 @@ const softenBaseMapLayer = (map: maplibregl.Map, layer: maplibregl.LayerSpecific
       if (/(water|ocean|sea)/.test(text)) {
         setPaintIfChanged(map, layer.id, "fill-color", "#FBF7EF");
         setPaintIfChanged(map, layer.id, "fill-opacity", 1);
+        setPaintIfChanged(map, layer.id, "fill-outline-color", "#B8A489");
       } else if (/(land|earth|country|admin|boundary|park|natural|landcover|landuse)/.test(text)) {
         setPaintIfChanged(map, layer.id, "fill-color", "#F0E6D5");
         setPaintIfChanged(map, layer.id, "fill-opacity", 1);
@@ -537,10 +538,10 @@ const softenBaseMapLayer = (map: maplibregl.Map, layer: maplibregl.LayerSpecific
     }
     if (layer.type === "symbol") {
       if (/(marine|ocean|sea|water)/.test(text)) {
-        setPaintIfChanged(map, layer.id, "text-color", "#2D5991");
+        setPaintIfChanged(map, layer.id, "text-color", "#2F73B5");
         setPaintIfChanged(map, layer.id, "text-halo-color", "#FBF7EF");
-        setPaintIfChanged(map, layer.id, "text-halo-width", 0.8);
-        setPaintIfChanged(map, layer.id, "text-opacity", 0.72);
+        setPaintIfChanged(map, layer.id, "text-halo-width", 0.7);
+        setPaintIfChanged(map, layer.id, "text-opacity", 0.86);
       }
     }
   } catch {

@@ -2571,7 +2571,8 @@ img {
 }
 
 .timeline-entry:has(.timeline-item.selected) .timeline-inline-preview {
-  margin-top: -8px;
+  margin-top: -46px;
+  margin-bottom: 6px;
 }
 
 .atlas-story-rail {
