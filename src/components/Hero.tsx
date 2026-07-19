@@ -10,8 +10,8 @@ export function Hero({ placeCount, countryCount, sinceYear }: HeroProps) {
       <nav className="hero-nav" aria-label="Primary">
         <a className="wordmark" href="/">
           Pretty Little Maps
+          <small>by Mika</small>
         </a>
-        <small className="hero-byline">by Mika</small>
         <dl className="hero-stats" aria-label="Atlas statistics">
           <div>
             <dt>Since</dt>
