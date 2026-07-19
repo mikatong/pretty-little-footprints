@@ -2544,6 +2544,18 @@ img {
   .rail-story-card strong { font-size: 18px; }
 }
 
+/* The signature moves beside the title only when the title leaves a genuine
+   editorial gap; smaller desktop widths keep it safely beneath the wordmark. */
+@media (min-width: 1600px) {
+  .hero-nav .wordmark small {
+    position: absolute;
+    top: clamp(19px, 1.85vw, 31px);
+    left: calc(100% + clamp(30px, 3.2vw, 62px));
+    margin: 0;
+    white-space: nowrap;
+  }
+}
+
 /* Focused timeline and story-rail cleanup. These rules intentionally replace
    the older positional homepage variants above with normal grid/flex flow. */
 .atlas-badge i,
