@@ -275,13 +275,61 @@ function canvasToWebpBlob(canvas: HTMLCanvasElement, quality: number) {
   });
 }
 
-async function decodeImageForCanvas(file: File): Promise<{ source: CanvasImageSource; width: number; height: number; close: () => void }> {
+async function readJpegExifOrientation(file: File) {
+  if (!/jpe?g/i.test(file.type) && !/\.jpe?g$/i.test(file.name)) return 1;
+
+  const bytes = new Uint8Array(await file.slice(0, 256 * 1024).arrayBuffer());
+  if (bytes[0] !== 0xff || bytes[1] !== 0xd8) return 1;
+
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let offset = 2;
+  while (offset + 4 < view.byteLength) {
+    if (view.getUint8(offset) !== 0xff) return 1;
+    const marker = view.getUint8(offset + 1);
+    const length = view.getUint16(offset + 2, false);
+    if (length < 2 || offset + 2 + length > view.byteLength) return 1;
+
+    if (marker === 0xe1 && length >= 10 && String.fromCharCode(...bytes.slice(offset + 4, offset + 10)) === "Exif\u0000\u0000") {
+      const tiff = offset + 10;
+      const littleEndian = view.getUint16(tiff, false) === 0x4949;
+      if (view.getUint16(tiff + 2, littleEndian) !== 0x002a) return 1;
+      const ifd = tiff + view.getUint32(tiff + 4, littleEndian);
+      if (ifd + 2 > view.byteLength) return 1;
+      const entries = view.getUint16(ifd, littleEndian);
+      for (let index = 0; index < entries; index += 1) {
+        const entry = ifd + 2 + index * 12;
+        if (entry + 12 > view.byteLength) return 1;
+        if (view.getUint16(entry, littleEndian) === 0x0112) {
+          const orientation = view.getUint16(entry + 8, littleEndian);
+          return orientation >= 1 && orientation <= 8 ? orientation : 1;
+        }
+      }
+      return 1;
+    }
+    offset += 2 + length;
+  }
+  return 1;
+}
+
+type DecodedCanvasImage = {
+  source: CanvasImageSource;
+  width: number;
+  height: number;
+  orientation: number;
+  close: () => void;
+};
+
+async function decodeImageForCanvas(file: File): Promise<DecodedCanvasImage> {
   try {
-    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" } as ImageBitmapOptions);
+    const [bitmap, orientation] = await Promise.all([
+      createImageBitmap(file, { imageOrientation: "none" } as ImageBitmapOptions),
+      readJpegExifOrientation(file),
+    ]);
     return {
       source: bitmap,
       width: bitmap.width,
       height: bitmap.height,
+      orientation,
       close: () => bitmap.close(),
     };
   } catch {
@@ -296,6 +344,9 @@ async function decodeImageForCanvas(file: File): Promise<{ source: CanvasImageSo
         source: image,
         width: image.naturalWidth,
         height: image.naturalHeight,
+        // HTMLImage already applies EXIF orientation in browsers that reach
+        // this fallback, so do not rotate the pixels a second time.
+        orientation: 1,
         close: () => URL.revokeObjectURL(url),
       };
     } catch {
@@ -303,6 +354,33 @@ async function decodeImageForCanvas(file: File): Promise<{ source: CanvasImageSo
       throw new Error("decode-failed");
     }
   }
+}
+
+function getOrientedDimensions(width: number, height: number, orientation: number) {
+  return orientation >= 5 && orientation <= 8 ? { width: height, height: width } : { width, height };
+}
+
+function drawImageWithExifOrientation(
+  context: CanvasRenderingContext2D,
+  image: DecodedCanvasImage,
+  width: number,
+  height: number,
+) {
+  const sourceWidth = Math.round(image.width * (width / getOrientedDimensions(image.width, image.height, image.orientation).width));
+  const sourceHeight = Math.round(image.height * (height / getOrientedDimensions(image.width, image.height, image.orientation).height));
+  context.save();
+  switch (image.orientation) {
+    case 2: context.translate(width, 0); context.scale(-1, 1); break;
+    case 3: context.translate(width, height); context.rotate(Math.PI); break;
+    case 4: context.translate(0, height); context.scale(1, -1); break;
+    case 5: context.rotate(Math.PI / 2); context.scale(1, -1); break;
+    case 6: context.translate(width, 0); context.rotate(Math.PI / 2); break;
+    case 7: context.translate(width, 0); context.rotate(Math.PI / 2); context.scale(-1, 1); break;
+    case 8: context.translate(0, height); context.rotate(-Math.PI / 2); break;
+    default: break;
+  }
+  context.drawImage(image.source, 0, 0, sourceWidth, sourceHeight);
+  context.restore();
 }
 
 export function formatImageBytes(bytes: number) {
@@ -329,10 +407,11 @@ export async function compressStoryImage(file: File, kind: "cover" | "gallery"):
   const maxDimension = kind === "cover" ? 1600 : 2000;
   const targetBytes = kind === "cover" ? 800 * 1024 : 1200 * 1024;
   const startingQuality = kind === "cover" ? 0.8 : 0.82;
-  const largestEdge = Math.max(decodedImage.width, decodedImage.height);
+  const orientedDimensions = getOrientedDimensions(decodedImage.width, decodedImage.height, decodedImage.orientation);
+  const largestEdge = Math.max(orientedDimensions.width, orientedDimensions.height);
   const scale = largestEdge > maxDimension ? maxDimension / largestEdge : 1;
-  const width = Math.max(1, Math.round(decodedImage.width * scale));
-  const height = Math.max(1, Math.round(decodedImage.height * scale));
+  const width = Math.max(1, Math.round(orientedDimensions.width * scale));
+  const height = Math.max(1, Math.round(orientedDimensions.height * scale));
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -343,7 +422,7 @@ export async function compressStoryImage(file: File, kind: "cover" | "gallery"):
     throw new Error("Could not prepare image compression.");
   }
 
-  context.drawImage(decodedImage.source, 0, 0, width, height);
+  drawImageWithExifOrientation(context, decodedImage, width, height);
   decodedImage.close();
 
   let quality = startingQuality;

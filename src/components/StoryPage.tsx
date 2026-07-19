@@ -13,23 +13,47 @@ function StoryImage({
   alt,
   caption,
   orientation = "landscape",
+  rotateClockwiseIfLandscape = false,
 }: {
   src: string;
   alt?: string;
   caption?: string;
   orientation?: StoryImageOrientation;
+  rotateClockwiseIfLandscape?: boolean;
 }) {
   const [detectedOrientation, setDetectedOrientation] = useState<StoryImageOrientation | null>(null);
+  const [displaySrc, setDisplaySrc] = useState(src);
+  const [legacyRotationApplied, setLegacyRotationApplied] = useState(false);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const actualOrientation = detectedOrientation ?? orientation;
   const detectOrientation = (image: HTMLImageElement) => {
     const { naturalWidth: width, naturalHeight: height } = image;
     if (!width || !height) return;
+    if (rotateClockwiseIfLandscape && !legacyRotationApplied && displaySrc === src && width > height) {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = height;
+        canvas.height = width;
+        const context = canvas.getContext("2d");
+        if (context) {
+          context.translate(canvas.width, 0);
+          context.rotate(Math.PI / 2);
+          context.drawImage(image, 0, 0);
+          setLegacyRotationApplied(true);
+          setDisplaySrc(canvas.toDataURL("image/webp", 0.96));
+          return;
+        }
+      } catch {
+        // The permanent upload fix below handles all newly uploaded images.
+      }
+    }
     setDetectedOrientation(width === height ? "square" : width > height ? "landscape" : "portrait");
   };
 
   useEffect(() => {
     setDetectedOrientation(null);
+    setDisplaySrc(src);
+    setLegacyRotationApplied(false);
     const image = imageRef.current;
     if (image?.complete) detectOrientation(image);
   }, [src]);
@@ -37,8 +61,9 @@ function StoryImage({
   return (
     <figure className={`story-image ${actualOrientation}`}>
       <img
-        src={src}
+        src={displaySrc}
         alt={alt ?? ""}
+        crossOrigin="anonymous"
         ref={imageRef}
         onLoad={(event: { currentTarget: HTMLImageElement }) => {
           detectOrientation(event.currentTarget);
@@ -131,7 +156,11 @@ export function StoryPage({ place, relatedPlaces, meaningfulStories, onSelectPla
         <p className="story-meta">{story?.status === "draft" ? "Draft" : "Story"}</p>
         {story?.dek ? <p className="story-summary">{story.dek}</p> : null}
         {story?.coverImage && !renderedCoverInBlocks ? (
-          <StoryImage src={story.coverImage} alt={story.coverAlt ?? `${story.title} story cover`} />
+          <StoryImage
+            src={story.coverImage}
+            alt={story.coverAlt ?? `${story.title} story cover`}
+            rotateClockwiseIfLandscape={place.id === "chengdu-2026"}
+          />
         ) : null}
 
         <div className="story-blocks">
