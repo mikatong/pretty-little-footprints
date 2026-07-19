@@ -61,7 +61,7 @@ export function PlaceGlyph({ place, className = "" }: PlaceGlyphProps) {
       aria-hidden="true"
       style={{ "--place-accent": accent.primary, "--place-accent-pale": accent.pale } as Record<string, string>}
     >
-      <g fill="var(--place-accent-pale)" stroke="var(--place-accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <g fill="none" stroke="var(--place-accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         {paths[iconType] ?? paths.default}
       </g>
     </svg>

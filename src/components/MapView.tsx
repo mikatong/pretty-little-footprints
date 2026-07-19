@@ -107,12 +107,11 @@ const getIconSvg = (iconType: MapIconType, accent: PlaceAccent, state: "lived" |
   const lived = state === "lived";
   const selected = state === "selected";
   const stroke = selected ? accent.dark : lived ? accent.dark : accent.primary;
-  const fill = selected || lived ? accent.pale : "#FFFDFC";
-  const opacity = selected ? "1" : "0.93";
-  const common = `fill="${fill}" stroke="${stroke}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"`;
-  const line = `fill="none" stroke="${stroke}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"`;
-  // Keep the selected location gently anchored, but leave regular destinations
-  // as clean editorial illustrations rather than icon-in-a-bubble badges.
+  const opacity = selected ? "0.98" : "0.88";
+  // A light, stroke-only atlas language keeps every destination airy at small
+  // sizes. The selected destination changes tone, never into a filled badge.
+  const common = `fill="none" stroke="${stroke}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"`;
+  const line = `fill="none" stroke="${stroke}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"`;
   const bg = "";
   const shapes: Record<MapIconType, string> = {
     home: `<path ${common} d="M12 24 24 14l12 10v10H14V24z"/><path ${line} d="M21 34v-8h6v8"/>`,
@@ -127,7 +126,7 @@ const getIconSvg = (iconType: MapIconType, accent: PlaceAccent, state: "lived" |
     fitzRoy: `<path ${common} d="M7 36 16 20l4 7 8-18 4 13 4-5 6 19z"/><path ${line} d="M7 39c8 2 20 2 35 0M28 9l1 15 4-6M16 20l3 12 4-4"/>`,
     machuPicchu: `<path ${common} d="M8 36h32v-5H12v5z"/><path ${line} d="M12 31h24v-5H16M16 26h16v-5H20M20 21h8v-5M15 31v5M21 26v5M27 21v10M33 26v10M24 12v4M20 12h8"/>`,
     iceberg: `<path ${common} d="M10 35 22 12l6 11 4-5 7 17z"/><path ${line} d="M13 36c6 3 16 3 23 0M22 12l1 14 5-3"/>`,
-    snow: `<path ${line} d="M24 10v28M14 17l20 14M34 17 14 31M16 24h16"/><circle cx="24" cy="24" r="3" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`,
+    snow: `<path ${line} d="M24 10v28M14 17l20 14M34 17 14 31M16 24h16"/><circle cx="24" cy="24" r="3" fill="none" stroke="${stroke}" stroke-width="1.5"/>`,
     forest: `<path ${common} d="M19 32h10L24 12z"/><path ${common} d="M11 35h10l-5-15z"/><path ${line} d="M24 32v5M16 35v3"/>`,
     cypress: `<path ${common} d="M17 34c-3-8 1-19 8-24 6 8 7 17 2 24z"/><path ${line} d="M24 14c-1 8-2 15-1 24M14 36h19"/>`,
     coast: `<path ${common} d="M12 33c7-8 15-11 25-10v10z"/><path ${line} d="M10 18c6 3 11 3 17 0M11 24c5 2 9 2 14 0"/>`,
@@ -139,7 +138,7 @@ const getIconSvg = (iconType: MapIconType, accent: PlaceAccent, state: "lived" |
     waterfall: `<path ${common} d="M13 13h22l-5 23H18z"/><path ${line} d="M19 17v14M24 17v16M29 17v14"/>`,
     eiffel: `<path ${line} d="M24 10 14 36M24 10l10 26M18 24h12M16 31h16M20 18h8"/>`,
     bigBen: `<path ${common} d="M18 36V16h12v20"/><path ${line} d="M16 16h16M24 9v7M21 22h6M24 19v4"/>`,
-    cnTower: `<path ${line} d="M24 9v28M18 22h12M20 26h8M21 14h6"/><circle cx="24" cy="20" r="5" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`,
+    cnTower: `<path ${line} d="M24 9v28M18 22h12M20 26h8M21 14h6"/><circle cx="24" cy="20" r="5" fill="none" stroke="${stroke}" stroke-width="1.5"/>`,
     spaceNeedle: `<path ${line} d="M24 11v25M15 20h18M18 17h12M19 36h10M18 26l12 10M30 26 18 36"/>`,
     neon: `<path ${common} d="M12 17h24v12H12z"/><path ${line} d="M16 23h16M18 29v7M30 29v7"/>`,
     landmark: `<path ${common} d="M14 36h20l-3-15H17z"/><path ${line} d="M24 12v24M18 12h12M17 20h14"/>`,
@@ -155,7 +154,7 @@ const getIconSvg = (iconType: MapIconType, accent: PlaceAccent, state: "lived" |
     bayArea: `<path ${line} d="M5 36h38M8 35c5-13 10-13 16 0M24 35c5-13 10-13 16 0M10 28h28M13 24v12M35 24v12M18 20h12M20 20v5M28 20v5"/>`,
     vancouver: `<path ${line} d="M6 36h36M11 36V25h8v11M21 36V20h7v16M30 36V27h7v9M14 25V9M11 12h6M10 16h8M32 27V13M29 17h6M28 21h8"/>`,
     iceland: `<path ${line} d="M5 36h38M8 33l8-14 5 8 6-16 13 22M12 36c5 2 18 2 25 0M16 19l2 8M27 11l1 16M33 23l2 10"/>`,
-    default: `<path ${common} d="M24 10c7 0 12 5 12 11 0 7-12 17-12 17S12 28 12 21c0-6 5-11 12-11z"/><circle cx="24" cy="21" r="3.5" fill="${stroke}"/>`,
+    default: `<path ${common} d="M24 10c7 0 12 5 12 11 0 7-12 17-12 17S12 28 12 21c0-6 5-11 12-11z"/><circle cx="24" cy="21" r="3.5" fill="none" stroke="${stroke}" stroke-width="1.5"/>`,
   };
   return `<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 48 48">${bg}${shapes[iconType]}</svg>`;
 };
