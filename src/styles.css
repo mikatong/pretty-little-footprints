@@ -2547,10 +2547,10 @@ img {
 /* The signature moves beside the title only when the title leaves a genuine
    editorial gap; smaller desktop widths keep it safely beneath the wordmark. */
 @media (min-width: 1600px) {
-  .hero-nav .wordmark small {
+  .hero-byline {
     position: absolute;
     top: clamp(19px, 1.85vw, 31px);
-    left: calc(100% + clamp(30px, 3.2vw, 62px));
+    left: calc(50% + 2px);
     margin: 0;
     white-space: nowrap;
   }
@@ -2566,6 +2566,20 @@ img {
 
 .atlas-badge {
   position: relative;
+}
+
+.hero-byline {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: end;
+  margin: 0 0 1px;
+  color: #9f755b;
+  font-family: "Snell Roundhand", "Apple Chancery", "Iowan Old Style", Georgia, serif;
+  font-size: clamp(21px, 1.75vw, 31px);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: .8;
 }
 
 .atlas-badge::after { display: none; }
@@ -2686,6 +2700,16 @@ img {
 }
 
 @media (min-width: 761px) {
+  .hero-nav { position: relative; }
+
+  .hero-byline {
+    position: absolute;
+    top: clamp(19px, 1.85vw, 31px);
+    left: calc(50% + 2px);
+    margin: 0;
+    white-space: nowrap;
+  }
+
   .timeline-entry:has(.timeline-item.selected) {
     margin: 0;
     padding: 0;
