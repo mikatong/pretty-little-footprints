@@ -2551,6 +2551,11 @@ img {
     position: absolute;
     top: clamp(19px, 1.85vw, 31px);
     left: calc(50% + 2px);
+    right: auto;
+    bottom: auto;
+    grid-column: auto;
+    grid-row: auto;
+    align-self: auto;
     margin: 0;
     white-space: nowrap;
   }
@@ -2706,6 +2711,11 @@ img {
     position: absolute;
     top: clamp(19px, 1.85vw, 31px);
     left: calc(50% + 2px);
+    right: auto;
+    bottom: auto;
+    grid-column: auto;
+    grid-row: auto;
+    align-self: auto;
     margin: 0;
     white-space: nowrap;
   }
