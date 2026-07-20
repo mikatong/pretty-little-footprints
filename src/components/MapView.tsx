@@ -34,8 +34,10 @@ type ValidPoint = {
 const mapStyle = "https://tiles.openfreemap.org/styles/positron";
 const worldCenter: [number, number] = [8, 12];
 const worldBounds: [[number, number], [number, number]] = [
-  [-179.5, -72],
-  [179.5, 82],
+  // Keep the full navigable latitude range available: the former -72 / 82
+  // bounds cut Antarctica and the high Arctic off before they reached view.
+  [-179.5, -85],
+  [179.5, 85],
 ];
 const pointSourceId = "map-points";
 const yearRouteSourceId = "journal-year-route";
